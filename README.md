@@ -64,9 +64,13 @@ Sistema seguro para condomínios onde QR Codes em locais comuns permitem aos con
 
 Este projeto utiliza o arquivo `AGENTS.md` para orientar agentes de IA no desenvolvimento. O documento define:
 
-- Stack e padrões de implementação
+- **Stack Tecnológica**: C# .NET 8, ASP.NET Core, PostgreSQL, Entity Framework Core
+- Bibliotecas recomendadas (QRCoder, JWT, SendGrid, FluentValidation, Serilog, xUnit, Moq)
+- Estrutura de projeto (Clean Architecture)
+- Comandos dotnet para desenvolvimento
 - Schema de banco de dados com suporte a acessos anônimos
 - Endpoints API anônimos (moradores) e autenticados (funcionários/administradores)
+- Exemplos de código em C# para todos os endpoints
 - Isolamento de dados baseado em papéis de acesso
 - Schema do token JWT com todos os campos documentados
 - Validações de segurança específicas por tipo de usuário
@@ -74,6 +78,39 @@ Este projeto utiliza o arquivo `AGENTS.md` para orientar agentes de IA no desenv
 - Requisitos de qualidade e acessibilidade
 
 Para mais informações sobre engenharia agêntica, veja as postagens no LinkedIn sobre o tema.
+
+## Como Começar
+
+### Pré-requisitos
+- .NET 8 SDK
+- PostgreSQL 14+
+- Docker (opcional, para banco de dados local)
+
+### Comandos Iniciais
+```bash
+# Clonar repositório
+git clone https://github.com/rodrigosabreu/sistema-condominio-qr.git
+cd sistema-condominio-qr
+
+# Restaurar dependências
+dotnet restore
+
+# Criar e aplicar migrations (quando implementado)
+dotnet ef migrations add InitialCreate
+dotnet ef database update
+
+# Rodar API em desenvolvimento
+dotnet run --project src/SistemaCondominio.Api
+
+# Rodar testes
+dotnet test
+```
+
+### Configuração de Ambiente
+1. Copiar `appsettings.json` para `appsettings.Development.json`
+2. Configurar string de conexão do PostgreSQL
+3. Configurar chave secreta para JWT
+4. Configurar API key do SendGrid
 
 ## Requisitos de Qualidade
 
