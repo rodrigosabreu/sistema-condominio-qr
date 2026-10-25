@@ -1,25 +1,30 @@
 # Sistema de Gestão de Condomínios com QR Codes
 
-Sistema seguro e multi-tenant para condomínios onde QR Codes em locais comuns permitem aos condôminos acessar informações sobre serviços, manutenções, interdições e outros eventos, com isolamento total de dados entre condomínios.
+Sistema seguro para condomínios onde QR Codes em locais comuns permitem aos condôminos acessar informações sobre serviços, manutenções, interdições e outros eventos, com isolamento de dados baseado em papéis de acesso.
 
 ## Funcionalidades
 
 - QR Codes posicionados em locais do condomínio (banheiros, salões, churrasqueiras, jardins, hortas, etc.)
-- Moradores escaneiam QR Codes com smartphones para visualizar informações (sem cadastro)
+- Moradores escaneiam QR Codes com smartphones para visualizar informações (sem cadastro, acesso anônimo)
 - Funcionários registram e concluem serviços (limpeza, manutenção, jardinagem)
 - Administradores gerenciam locais, serviços e usuários do condomínio
-- Histórico acessível via link único por QR Code com paginação
+- Histórico acessível via link único por QR Code
 - Notificações por email para administradores sobre eventos
 - Contagem de visualizações de QR Codes para rastreamento de uso
 
-## Segurança e Multi-tenancy
+## Segurança e Isolamento de Dados
 
-- **Isolamento por condomínio**: Cada condomínio tem dados completamente isolados
-- **Prevenção de horizontal privilege escalation**: Usuários não acessam dados de outros condomínios
-- **Autenticação JWT**: Tokens com escopo limitado ao condomínio do usuário
-- **Validação obrigatória**: Toda consulta verifica condomínio do usuário autenticado
-- **Auditoria de acesso**: Logs de todas as consultas para rastreamento
+### Isolamento por Papel
+- **Moradores (anônimos)**: Acesso irrestrito a QR Codes públicos. Podem escanear QR Codes de qualquer condomínio sem autenticação.
+- **Funcionários/Administradores (cadastrados)**: Isolamento obrigatório por condomínio. Apenas acessam dados do próprio condomínio.
+- **Super Admin**: Acesso total a todos os condomínios.
+
+### Segurança Geral
+- **Autenticação JWT**: Tokens com escopo limitado ao condomínio do usuário (apenas para endpoints autenticados)
+- **Validação de UUID**: IDs devem ser UUIDs válidos
+- **Auditoria de acesso**: Logs de todas as consultas (incluindo acessos anônimos)
 - **Rate limiting**: Proteção contra scraping e ataques
+- **Prevenção de horizontal privilege escalation**: Usuários cadastrados não acessam dados de outros condomínios
 
 ## Papéis e Permissões
 
@@ -27,6 +32,7 @@ Sistema seguro e multi-tenant para condomínios onde QR Codes em locais comuns p
 - Acesso total a todos os condomínios
 - Gerencia administradores de condomínio
 - Dashboard consolidado
+- Bypass de validação de condomínio
 
 ### Administrador de Condomínio
 - Acesso limitado ao seu condomínio
@@ -39,17 +45,19 @@ Sistema seguro e multi-tenant para condomínios onde QR Codes em locais comuns p
 - Não edita serviços de outros usuários
 
 ### Moradores
-- Acesso livre sem cadastro
+- Acesso livre sem cadastro (anônimo)
 - Apenas visualização via QR Code
+- Podem escanear QR Codes de qualquer condomínio
 - Não registra serviços
 
 ## Componentes
 
 - **Gerador de QR Codes**: Sistema de geração de QR Codes únicos por local
-- **API de Consulta**: Endpoint REST com validação de escopo por condomínio
+- **API de Consulta Anônima**: Endpoint público para moradores (`/api/qrcode/{qr_code_id}`) sem autenticação
+- **API de Consulta Autenticada**: Endpoints protegidos para funcionários/administradores com validação de escopo por condomínio
 - **Dashboard Administrativo**: Gestão de locais, serviços e QR Codes (por condomínio)
 - **Gateway de Autenticação**: Validação de JWT e verificação de escopo
-- **Banco de Dados**: Armazenamento multi-tenant com isolamento por condomínio
+- **Banco de Dados**: Armazenamento com isolamento baseado em papéis de acesso
 - **Sistema de Notificações**: Envio de emails para administradores
 
 ## Documentação para Agentes de IA
@@ -57,8 +65,10 @@ Sistema seguro e multi-tenant para condomínios onde QR Codes em locais comuns p
 Este projeto utiliza o arquivo `AGENTS.md` para orientar agentes de IA no desenvolvimento. O documento define:
 
 - Stack e padrões de implementação
-- Schema de banco de dados multi-tenant
-- Endpoints API com validações de segurança
+- Schema de banco de dados com suporte a acessos anônimos
+- Endpoints API anônimos (moradores) e autenticados (funcionários/administradores)
+- Isolamento de dados baseado em papéis de acesso
+- Validações de segurança específicas por tipo de usuário
 - Padrões de localização (português)
 - Requisitos de qualidade e acessibilidade
 
