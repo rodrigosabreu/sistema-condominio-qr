@@ -97,7 +97,18 @@ Precisam de cadastro para acessar o sistema (via JWT):
 - **Banco de Dados**: PostgreSQL
 - **ORM**: Entity Framework Core
 
-### Bibliotecas Principais
+### Frontend
+- **Linguagem**: TypeScript
+- **Framework**: React 18+ com Vite
+- **Estilização**: Tailwind CSS
+- **Componentes**: Headless UI (sem estilos pré-definidos)
+- **Gerenciamento de Estado**: Zustand
+- **Validação**: React Hook Form + Zod
+- **HTTP Client**: Axios
+- **Navegação**: React Router DOM
+- **Testes**: Vitest + React Testing Library
+
+### Bibliotecas Principais (Backend)
 - **QR Code**: QRCoder (https://github.com/codebude/QRCoder)
 - **JWT**: System.IdentityModel.Tokens.Jwt (Microsoft oficial)
 - **Email**: SendGrid (SDK oficial: SendGrid.Extensions.DependencyInjection)
@@ -108,27 +119,33 @@ Precisam de cadastro para acessar o sistema (via JWT):
 ### Estrutura de Projeto
 ```
 sistema-condominio-qr/
-├── src/
-│   ├── SistemaCondominio.Api/           # API (Controllers, Minimal APIs)
-│   ├── SistemaCondominio.Domain/        # Entidades, Enums, Interfaces
-│   ├── SistemaCondominio.Application/   # Services, DTOs, Validators
-│   ├── SistemaCondominio.Infrastructure/# EF Core, Repositories, External Services
-│   └── SistemaCondominio.Auth/          # JWT generation, Authentication
-├── tests/
-│   ├── SistemaCondominio.UnitTests/
-│   └── SistemaCondominio.IntegrationTests/
+├── backend/                             # Tudo do lado da API (.NET)
+│   ├── SistemaCondominio.slnx           # Solução
+│   ├── .tools/                          # dotnet-ef local (versão 10.0.14)
+│   ├── src/
+│   │   ├── SistemaCondominio.Api/           # API (Minimal APIs, endpoints, Program.cs)
+│   │   ├── SistemaCondominio.Domain/        # Entidades, Enums
+│   │   ├── SistemaCondominio.Application/   # Serviços, DTOs, Validacao, interfaces
+│   │   ├── SistemaCondominio.Infrastructure/# EF Core (AppDbContext, migrations)
+│   │   └── SistemaCondominio.Auth/          # JWT, hash de senha PBKDF2
+├── frontend/                            # Aplicação web (React + Vite + TypeScript)
+│   ├── src/                             # paginas/, componentes/, api/, auth/, lib/
+│   └── vite.config.ts                   # Proxy de /api para a API (porta 5234)
 ├── docker-compose.yml                   # PostgreSQL + pgAdmin
-├── .env.example
-└── appsettings.json
+├── setup.sh / setup.bat                 # Scripts históricos de criação da estrutura
+└── AGENTS.md, README.md, PROGRESSO.md
 ```
 
 ### Comandos
 - `dotnet restore` - Restaurar dependências
 - `dotnet build` - Compilar projeto
-- `dotnet run --project src/SistemaCondominio.Api` - Rodar API em desenvolvimento
+- `dotnet build backend/SistemaCondominio.slnx` - Compilar a solução (a partir da raiz)
+- `ASPNETCORE_ENVIRONMENT=Development dotnet run --project backend/src/SistemaCondominio.Api --urls http://localhost:5234` - Rodar API em desenvolvimento (aplica migrations e seed)
+- `cd frontend && npm run dev` - Rodar o front em http://localhost:5173 (proxy para a API)
 - `dotnet test` - Rodar testes
-- `dotnet ef migrations add <Nome>` - Criar migration
-- `dotnet ef database update` - Aplicar migrations
+- `./backend/.tools/dotnet-ef migrations add <Nome> --project backend/src/SistemaCondominio.Infrastructure --startup-project backend/src/SistemaCondominio.Api --output-dir Data/Migrations` - Criar migration
+- `./backend/.tools/dotnet-ef database update --project backend/src/SistemaCondominio.Infrastructure --startup-project backend/src/SistemaCondominio.Api` - Aplicar migrations
+- `cd frontend && npm run build` - Checar tipos e gerar build de produção do front
 
 ### Ambiente de Desenvolvimento Local
 
@@ -162,7 +179,7 @@ services:
     image: dpage/pgadmin4:latest
     container_name: condominio-pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@condominio.local
+      PGADMIN_DEFAULT_EMAIL: admin@condominio.com
       PGADMIN_DEFAULT_PASSWORD: admin
     ports:
       - "5050:80"
@@ -208,11 +225,13 @@ docker-compose down -v
 - Melhor para projetos .NET
 - Debugger integrado
 - Test runner integrado
+- Suporte a Blazor e React via SPA templates
 
 **VS Code** (Leve)
 - Extensão: C# Dev Kit
 - Extensão: .NET Install Tool
 - Extensão: PostgreSQL
+- Extensão: Tailwind CSS IntelliSense
 
 #### Ferramentas Adicionais
 
@@ -924,6 +943,43 @@ Todos os endpoints autenticados requerem um JWT Bearer token com o seguinte sche
 - **Não pode editar ou excluir** eventos de outros usuários
 - Pode apenas concluir serviços que criou
 - Token JWT: `{ condominoId: "...", usuarioId: "...", papel: "funcionario", geral: false }`
+
+## Regras de Cadastro e Edição (CRÍTICO)
+
+### Matriz de Permissões
+
+| Recurso | Administrador Geral | Administrador de Condomínio | Usuário Comum |
+|---|---|---|---|
+| Condomínio (criar) | Sim | Não | Não |
+| Condomínio (editar) | Qualquer | Somente o próprio | Não |
+| Local e QR Code (criar/editar) | Qualquer condomínio | Somente do próprio condomínio | Não |
+| Usuário (criar/editar) | Qualquer condomínio, inclusive administradores | Somente funcionários do próprio condomínio | Não |
+| Serviço/evento (registrar) | Sim | Sim (no próprio condomínio) | Sim (no próprio condomínio) |
+| Serviço/evento (editar/concluir) | Qualquer | Qualquer do próprio condomínio | Somente os que registrou |
+
+### Regras
+- **Somente o Administrador Geral cadastra condomínios.** Administradores de condomínio não criam nem editam outro condomínio.
+- **Administrador Geral** pode criar e editar qualquer tipo de cadastro em qualquer condomínio, inclusive administradores de condomínio.
+- **Administrador de Condomínio** pode criar e editar locais, QR Codes e funcionários **somente dentro do seu condomínio**. Não pode promover ninguém a Administrador Geral nem criar administradores de condomínio (apenas funcionários).
+- **Usuário Comum** não cadastra nem edita nenhum recurso de cadastro.
+- **Condomínio grava e edita apenas as próprias informações.** Qualquer alteração de um recurso exige que o `CondominioId` do recurso, lido do banco, coincida com o condomínio do token (exceto Administrador Geral). Nunca confiar no `condominioId` enviado no corpo da requisição para validar escopo.
+- Ao criar um local, o QR Code é gerado automaticamente no mesmo condomínio.
+- Usuários são criados com senha (armazenada apenas como hash PBKDF2). Nunca retornar `senhaHash` nas respostas.
+- Violações de escopo retornam `403` com a mensagem `Este recurso não pertence ao seu condomínio`.
+
+### Endpoints de Cadastro (previstos)
+- `POST /api/condominios` · `PUT /api/condominios/{id}` (somente Administrador Geral cria; editar: Geral ou administrador do próprio condomínio)
+- `POST /api/locais` · `PUT /api/locais/{id}` (Geral ou administrador do condomínio)
+- `POST /api/usuarios` · `PUT /api/usuarios/{id}` (Geral, ou administrador do condomínio para funcionários do próprio condomínio)
+- `PUT /api/servicos/{id}` (editar tipo, descrição, responsável e observações conforme a matriz acima)
+
+## Exibição e Impressão de QR Codes
+
+- O QR Code de um local é exibido **centralizado na tela**, em diálogo de tamanho grande (mínimo 22rem de largura), inclusive em celulares. Nunca fica cortado pela borda inferior.
+- Cada QR Code tem as ações **Imprimir** (abre a impressão do navegador somente com o QR, o nome do local e o condomínio, em fundo branco) e **Baixar PNG**.
+- O PNG é gerado pela API com 20 pixels por módulo, para boa impressão em placas.
+- O conteúdo do QR é `QrCode:UrlBase/{qrCodeId}`. Antes de imprimir placas definitivas, o `UrlBase` deve apontar para o endereço de produção, pois QR impresso não pode ser alterado depois.
+- Apenas administradores (Geral ou do próprio condomínio) geram e imprimem QR Codes. Funcionários não veem a ação.
 
 ## Segurança de Notificações
 
