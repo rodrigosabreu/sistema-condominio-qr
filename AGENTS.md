@@ -7,7 +7,7 @@ description: Guia para agentes que desenvolvem sistema de gerenciamento de condo
 # Agente: Sistema de Condomínios QR
 
 ## Propósito
-Este agente auxilia no desenvolvimento de um sistema seguro para condomínios onde QR Codes em locais comuns permitem aos condôminos acessar informações sobre serviços, manutenções, interdições e outros eventos, com isolamento total de dados entre condomínios.
+Este agente auxilia no desenvolvimento de um sistema seguro para condomínios onde QR Codes em locais comuns permitem aos condôminos acessar informações sobre serviços, manutenções, interdições e outros eventos, com isolamento de dados baseado em papéis de acesso (moradores têm acesso público, usuários cadastrados têm isolamento por condomínio).
 
 ## Cenário de Uso
 - QR Codes posicionados em locais do condomínio (banheiros, salões, churrasqueiras, jardins, hortas, etc.)
@@ -31,7 +31,8 @@ Este agente auxilia no desenvolvimento de um sistema seguro para condomínios on
 
 ### Componentes Principais
 - **Gerador de QR Codes**: Sistema de geração de QR Codes únicos por local/serviço
-- **API de Consulta**: Endpoint REST para fetch de informações por QR Code ID (com validação de escopo)
+- **API de Consulta Anônima**: Endpoint público para moradores `/api/qrcode/{qr_code_id}` (sem validação de escopo)
+- **API de Consulta Autenticada**: Endpoints protegidos para funcionários/administradores com validação de escopo por condomínio
 - **Dashboard Administrativo**: Gestão de locais, serviços e QR Codes (por condomínio)
 - **Banco de Dados**: Armazenamento de locais, QR Codes, serviços e histórico
 - **Gateway de Autenticação**: Validação de JWT e verificação de escopo do condomínio
@@ -272,9 +273,37 @@ const obterServicosPorQRCode = async (req, res) => {
 };
 ```
 
-### Estrutura de Resposta da API
+### Estrutura de Resposta da API (Endpoint Anônimo)
 ```json
-GET /api/servicos/por-local/{localId}
+GET /api/qrcode/{qr_code_id}
+{
+  "local": {
+    "id": "...",
+    "nome": "Banheiro Masculino - 1º Andar",
+    "tipo": "banheiro",
+    "qrCodeId": "...",
+    "condominoId": "...",
+    "condominoNome": "Condomínio Residencial Flores",
+    "visualizacoes": 45
+  },
+  "servicos": [
+    {
+      "id": "...",
+      "tipo": "limpeza",
+      "descricao": "Limpeza completa",
+      "status": "concluido",
+      "agendadoEm": "2026-10-25T08:00:00Z",
+      "concluidoEm": "2026-10-25T10:30:00Z",
+      "responsavel": "João Silva",
+      "observacoes": "Limpeza de pisos e sanitários"
+    }
+  ]
+}
+```
+
+### Estrutura de Resposta da API (Endpoint Autenticado)
+```json
+GET /api/servicos/por-local/{localId}?pagina=1&tamanho=20
 {
   "local": {
     "id": "...",
@@ -294,47 +323,21 @@ GET /api/servicos/por-local/{localId}
       "tipo": "limpeza",
       "agendadoEm": "2026-10-26T08:00:00Z"
     }
-  }
-}
-```
-
-### Response em caso de tentativa indevida de acesso
-```json
-{
-  "erro": "Acesso negado",
-  "mensagem": "Este QR Code não pertence ao seu condomínio"
-}
-```
-
-### Response com paginação (sucesso)
-```json
-{
-  "local": {
-    "id": "...",
-    "nome": "Banheiro Masculino - 1º Andar",
-    "tipo": "banheiro",
-    "qrCodeId": "...",
-    "condominoId": "...",
-    "visualizacoes": 45
   },
-  "servicos": [
-    {
-      "id": "...",
-      "tipo": "limpeza",
-      "descricao": "Limpeza completa",
-      "status": "concluido",
-      "agendadoEm": "2026-10-25T08:00:00Z",
-      "concluidoEm": "2026-10-25T10:30:00Z",
-      "responsavel": "João Silva",
-      "observacoes": "Limpeza de pisos e sanitários"
-    }
-  ],
   "pagina": {
     "atual": 1,
     "tamanho": 20,
     "totalRegistros": 150,
     "totalPaginas": 8
   }
+}
+```
+
+### Response em caso de tentativa indevida de acesso (endpoint autenticado)
+```json
+{
+  "erro": "Acesso negado",
+  "mensagem": "Este QR Code não pertence ao seu condomínio"
 }
 ```
 
@@ -352,17 +355,106 @@ GET /api/servicos/por-local/{localId}
 - **Limite máximo**: `tamanho=100` (para prevenir abuso)
 - **Validação**: Parâmetros devem ser números positivos
 - **Resposta**: Inclui metadata de paginação (`pagina.atual`, `pagina.totalPaginas`, etc.)
+- **Nota**: Paginação se aplica apenas a endpoints autenticados. Endpoint anônimo retorna fixo de 20 registros.
+
+### Endpoint Autenticado para Consulta (Exemplo)
+
+```javascript
+// API: GET /api/servicos/por-local/{localId}?pagina=1&tamanho=20
+// Requer: Authorization: Bearer <token>
+// Token deve conter: { condominoId, usuarioId, papel, geral }
+
+const obterServicosPorLocal = async (req, res) => {
+  const { localId } = req.params;
+  const { condominoId, usuarioId, papel, geral } = req.user;
+  const pagina = parseInt(req.query.pagina) || 1;
+  const tamanho = parseInt(req.query.tamanho) || 20;
+  const offset = (pagina - 1) * tamanho;
+
+  // 1. Validar UUID
+  if (!eUUIDValido(localId)) {
+    return res.status(400).json({ erro: 'ID inválido' });
+  }
+
+  // 2. Buscar local
+  const local = await db.consulta(
+    'SELECT * FROM locais WHERE id = $1',
+    [localId]
+  );
+
+  if (!local) {
+    return res.status(404).json({ erro: 'Local não encontrado' });
+  }
+
+  // 3. Validar escopo de condomínio (CRÍTICO)
+  if (!geral && local[0].condomino_id !== condominoId) {
+    registrarTentativaAcesso(usuarioId, localId, condominoId, 403);
+    return res.status(403).json({
+      erro: 'Acesso negado',
+      mensagem: 'Este local não pertence ao seu condomínio'
+    });
+  }
+
+  // 4. Verificar limite de consultas
+  if (limiteConsultas.ehRateLimited(usuarioId, condominoId)) {
+    return res.status(429).json({ erro: 'Limite de consultas excedido' });
+  }
+
+  // 5. Buscar dados do local com paginação
+  const servicos = await db.consulta(
+    'SELECT * FROM servicos WHERE local_id = $1 ORDER BY criado_em DESC LIMIT $2 OFFSET $3',
+    [localId, tamanho, offset]
+  );
+
+  // 6. Contar total de registros para paginação
+  const totalRegistros = await db.consulta(
+    'SELECT COUNT(*) FROM servicos WHERE local_id = $1',
+    [localId]
+  );
+
+  // 7. Registrar acesso
+  registrarAcesso(usuarioId, localId, condominoId, 200);
+
+  res.json({
+    local: {
+      id: local[0].id,
+      nome: local[0].nome,
+      tipo: local[0].tipo,
+      qrCodeId: local[0].qr_code_id,
+      condominoId: local[0].condomino_id
+    },
+    statusAtual: {
+      ultimoServico: servicos[0] ? {
+        tipo: servicos[0].tipo,
+        concluidoEm: servicos[0].concluido_em,
+        responsavel: servicos[0].responsavel
+      } : null,
+      interrupcaoAtual: null,
+      proximoAgendado: null
+    },
+    pagina: {
+      atual: pagina,
+      tamanho: tamanho,
+      totalRegistros: totalRegistros[0].count,
+      totalPaginas: Math.ceil(totalRegistros[0].count / tamanho)
+    }
+  });
+};
+```
 
 ### Endpoint para Registrar Evento (ex: concluir limpeza)
 
 ```javascript
 // API: POST /api/servicos
 // Requer: Authorization: Bearer <token>
-// Token deve conter: { condominoId, usuarioId, funcao, geral }
+// Token deve conter: { condominoId, usuarioId, papel, geral }
+// onde:
+//   - papel: 'administrador' | 'funcionario'
+//   - geral: boolean (true para Super Admin, false para outros)
 
 const registrarServico = async (req, res) => {
   const { localId, tipo, descricao, responsavel, observacoes } = req.body;
-  const { condominoId, usuarioId, geral } = req.user;
+  const { condominoId, usuarioId, papel, geral } = req.user;
 
   // 1. Validar dados de entrada
   if (!localId || !tipo || !responsavel) {
@@ -431,8 +523,8 @@ const registrarServico = async (req, res) => {
     for (const admin of administradores) {
       await enviarEmail({
         para: admin.email,
-        assunto: `Novo Serviço Registrado em ${local.nome}`,
-        corpo: `O funcionário ${usuario.nome} registrou um novo serviço em ${local.nome}:\n\n` +
+        assunto: `Novo Serviço Registrado em ${local[0].nome}`,
+        corpo: `O funcionário ${usuario[0].nome} registrou um novo serviço em ${local[0].nome}:\n\n` +
                `Tipo: ${tipo}\n` +
                `Descrição: ${descricao}\n` +
                `Responsável: ${responsavel}\n` +
@@ -463,11 +555,14 @@ const registrarServico = async (req, res) => {
 ```javascript
 // API: PATCH /api/servicos/{servicoId}/concluir
 // Requer: Authorization: Bearer <token>
-// Token deve conter: { condominoId, usuarioId, geral }
+// Token deve conter: { condominoId, usuarioId, papel, geral }
+// onde:
+//   - papel: 'administrador' | 'funcionario'
+//   - geral: boolean (true para Super Admin, false para outros)
 
 const concluirServico = async (req, res) => {
   const { servicoId } = req.params;
-  const { usuarioId, condominoId, geral } = req.user;
+  const { usuarioId, condominoId, papel, geral } = req.user;
   const { observacoes } = req.body;
 
   // 1. Buscar serviço
@@ -522,7 +617,7 @@ const concluirServico = async (req, res) => {
     );
 
     const localInfo = await db.consulta(
-      'SELECT nome, condomino_id FROM locais WHERE id = $1',
+      'SELECT nome FROM locais WHERE id = $1',
       [servicoAtualizado[0].local_id]
     );
 
@@ -590,6 +685,24 @@ const concluirServico = async (req, res) => {
 - Mensagens de erro devem ser amigáveis e em português
 - Validações de entrada devem ser claras e descritivas em português
 
+### Schema do Token JWT
+Todos os endpoints autenticados requerem um JWT Bearer token com o seguinte schema:
+
+```json
+{
+  "condominoId": "UUID do condomínio do usuário",
+  "usuarioId": "UUID do usuário autenticado",
+  "papel": "administrador" | "funcionario",
+  "geral": true | false
+}
+```
+
+**Explicação dos campos:**
+- `condominoId`: UUID do condomínio ao qual o usuário pertence (nulo para Super Admin)
+- `usuarioId`: UUID do usuário autenticado
+- `papel`: Papel do usuário ('administrador' ou 'funcionario')
+- `geral`: Booleano indicando se é Super Admin (true = acesso total a todos condomínios, false = acesso limitado ao próprio condomínio)
+
 ## Papéis e Permissões Detalhadas
 
 ### Administrador Geral (Super Admin)
@@ -598,7 +711,7 @@ const concluirServico = async (req, res) => {
 - Pode visualizar, editar e excluir qualquer dado do sistema
 - Gerencia administradores de condomínio
 - Acesso ao dashboard consolidado com dados de todos os condomínios
-- Token JWT deve conter `geral: true`
+- Token JWT: `{ condominoId: null, usuarioId: "...", papel: "administrador", geral: true }`
 
 ### Administrador de Condomínio
 - **Nível de acesso**: 50 (por condomínio)
@@ -606,7 +719,7 @@ const concluirServico = async (req, res) => {
 - Pode visualizar, editar e excluir todos os locais e serviços do condomínio
 - Pode cadastrar novos funcionários/usuários do condomínio
 - Recebe alertas e notificações do condomínio
-- Token JWT deve conter `condominoId` e `papel: 'administrador'`
+- Token JWT: `{ condominoId: "...", usuarioId: "...", papel: "administrador", geral: false }`
 
 ### Usuário Comum (Funcionário)
 - **Nível de acesso**: 10 (por condomínio)
@@ -615,7 +728,7 @@ const concluirServico = async (req, res) => {
 - Pode visualizar apenas os dados do seu condomínio
 - **Não pode editar ou excluir** eventos de outros usuários
 - Pode apenas concluir serviços que criou
-- Token JWT deve conter `condominoId` e `papel: 'funcionario'`
+- Token JWT: `{ condominoId: "...", usuarioId: "...", papel: "funcionario", geral: false }`
 
 ## Segurança de Notificações
 
