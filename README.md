@@ -103,6 +103,27 @@ docker-compose ps
 ```
 
 ### Comandos Iniciais
+
+**Opção 1: Usar script automatizado (Recomendado)**
+
+```bash
+# Clonar repositório
+git clone https://github.com/rodrigosabreu/sistema-condominio-qr.git
+cd sistema-condominio-qr
+
+# Subir banco de dados
+docker-compose up -d
+
+# Rodar script de setup (Windows)
+setup.bat
+
+# Ou (Linux/Mac)
+chmod +x setup.sh
+./setup.sh
+```
+
+**Opção 2: Criar estrutura manualmente**
+
 ```bash
 # Clonar repositório
 git clone https://github.com/rodrigosabreu/sistema-condominio-qr.git
@@ -113,43 +134,43 @@ docker-compose up -d
 
 # Criar estrutura de projetos (seguindo AGENTS.md)
 dotnet new sln -n SistemaCondominio
-dotnet new webapi -n SistemaCondominio.Api
-dotnet new classlib -n SistemaCondominio.Domain
-dotnet new classlib -n SistemaCondominio.Application
-dotnet new classlib -n SistemaCondominio.Infrastructure
-dotnet new classlib -n SistemaCondominio.Auth
+dotnet new webapi -n SistemaCondominio.Api -o src/SistemaCondominio.Api
+dotnet new classlib -n SistemaCondominio.Domain -o src/SistemaCondominio.Domain
+dotnet new classlib -n SistemaCondominio.Application -o src/SistemaCondominio.Application
+dotnet new classlib -n SistemaCondominio.Infrastructure -o src/SistemaCondominio.Infrastructure
+dotnet new classlib -n SistemaCondominio.Auth -o src/SistemaCondominio.Auth
 
 # Adicionar projetos à solução
-dotnet sln add SistemaCondominio.Api/SistemaCondominio.Api.csproj
-dotnet sln add SistemaCondominio.Domain/SistemaCondominio.Domain.csproj
-dotnet sln add SistemaCondominio.Application/SistemaCondominio.Application.csproj
-dotnet sln add SistemaCondominio.Infrastructure/SistemaCondominio.Infrastructure.csproj
-dotnet sln add SistemaCondominio.Auth/SistemaCondominio.Auth.csproj
+dotnet sln add src/SistemaCondominio.Api/SistemaCondominio.Api.csproj
+dotnet sln add src/SistemaCondominio.Domain/SistemaCondominio.Domain.csproj
+dotnet sln add src/SistemaCondominio.Application/SistemaCondominio.Application.csproj
+dotnet sln add src/SistemaCondominio.Infrastructure/SistemaCondominio.Infrastructure.csproj
+dotnet sln add src/SistemaCondominio.Auth/SistemaCondominio.Auth.csproj
 
 # Adicionar referências entre projetos
-dotnet add SistemaCondominio.Api reference SistemaCondominio.Application SistemaCondominio.Auth
-dotnet add SistemaCondominio.Application reference SistemaCondominio.Domain
-dotnet add SistemaCondominio.Infrastructure reference SistemaCondominio.Domain
-dotnet add SistemaCondominio.Auth reference SistemaCondominio.Domain
+dotnet add src/SistemaCondominio.Api reference src/SistemaCondominio.Application src/SistemaCondominio.Auth
+dotnet add src/SistemaCondominio.Application reference src/SistemaCondominio.Domain
+dotnet add src/SistemaCondominio.Infrastructure reference src/SistemaCondominio.Domain
+dotnet add src/SistemaCondominio.Auth reference src/SistemaCondominio.Domain
 
 # Instalar pacotes NuGet
-dotnet add SistemaCondominio.Infrastructure package Microsoft.EntityFrameworkCore.Design
-dotnet add SistemaCondominio.Infrastructure package Npgsql.EntityFrameworkCore.PostgreSQL
-dotnet add SistemaCondominio.Infrastructure package QRCoder
-dotnet add SistemaCondominio.Api package Microsoft.AspNetCore.Authentication.JwtBearer
-dotnet add SistemaCondominio.Api package SendGrid.Extensions.DependencyInjection
-dotnet add SistemaCondominio.Api package Serilog.AspNetCore
-dotnet add SistemaCondominio.Application package FluentValidation
+dotnet add src/SistemaCondominio.Infrastructure package Microsoft.EntityFrameworkCore.Design
+dotnet add src/SistemaCondominio.Infrastructure package Npgsql.EntityFrameworkCore.PostgreSQL
+dotnet add src/SistemaCondominio.Infrastructure package QRCoder
+dotnet add src/SistemaCondominio.Api package Microsoft.AspNetCore.Authentication.JwtBearer
+dotnet add src/SistemaCondominio.Api package SendGrid.Extensions.DependencyInjection
+dotnet add src/SistemaCondominio.Api package Serilog.AspNetCore
+dotnet add src/SistemaCondominio.Application package FluentValidation
 
 # Restaurar dependências
 dotnet restore
 
 # Criar e aplicar migrations (quando tiver o DbContext)
-dotnet ef migrations add InitialCreate --project SistemaCondominio.Infrastructure --startup-project SistemaCondominio.Api
-dotnet ef database update --project SistemaCondominio.Infrastructure --startup-project SistemaCondominio.Api
+dotnet ef migrations add InitialCreate --project src/SistemaCondominio.Infrastructure --startup-project src/SistemaCondominio.Api
+dotnet ef database update --project src/SistemaCondominio.Infrastructure --startup-project src/SistemaCondominio.Api
 
 # Rodar API em desenvolvimento
-dotnet run --project SistemaCondominio.Api
+dotnet run --project src/SistemaCondominio.Api
 
 # Rodar testes
 dotnet test
