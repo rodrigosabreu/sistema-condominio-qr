@@ -68,6 +68,7 @@ Este projeto utiliza o arquivo `AGENTS.md` para orientar agentes de IA no desenv
 - Schema de banco de dados com suporte a acessos anônimos
 - Endpoints API anônimos (moradores) e autenticados (funcionários/administradores)
 - Isolamento de dados baseado em papéis de acesso
+- Schema do token JWT com todos os campos documentados
 - Validações de segurança específicas por tipo de usuário
 - Padrões de localização (português)
 - Requisitos de qualidade e acessibilidade
