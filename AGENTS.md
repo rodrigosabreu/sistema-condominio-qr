@@ -16,13 +16,16 @@ Este agente auxilia no desenvolvimento de um sistema seguro para condomínios on
 - Histórico acessível via link único por QR Code
 
 ## Segurança (CRÍTICO)
-- **Escopo por condomínio**: Cada condômino só acessa dados do seu próprio condomínio
-- **Validação obrigatória**: Toda consulta deve verificar o condomínio do usuário autenticado
-- **Prevenção de Horizontal Privilege Escalation**: Usuários não podem consultar QR Codes de outros condomínios
+
+### Isolamento por Papel (CRÍTICO)
+- **Moradores (acesso anônimo)**: Não há isolamento por condomínio. Eles podem consultar QR Codes de **qualquer condomínio**. Apenas validamos que o QR Code existe no banco de dados.
+- **Usuários cadastrados (funcionários/administradores)**: Validação obrigatória que o usuário só acessa dados do seu próprio condomínio (ou todos, se for Administrador Geral)
+
+### Regras Gerais de Segurança
+- **Validação de UUID**: IDs devem ser UUIDs válidos
 - **Rate Limiting**: Proteção contra scraping e ataques de força bruta
-- **Authentication Bearer Token**: JWT com scope limitado ao condomínio do usuário
-- **Validação de UUID**: IDs devem ser UUIDs válidos e pertencer ao condomínio autenticado
-- **Auditoria de Acesso**: Logs de todas as consultas para rastreamento de tentativas indevidas
+- **Authentication Bearer Token**: JWT com scope limitado ao condomínio do usuário (apenas para endpoints autenticados)
+- **Auditoria de Acesso**: Logs de todas as consultas para rastreamento (incluindo acessos anônimos de moradores)
 
 ## Estrutura do Sistema
 
@@ -48,7 +51,7 @@ Este agente auxilia no desenvolvimento de um sistema seguro para condomínios on
 O sistema tem duas categorias de acesso:
 
 #### 1. Usuários Cadastrados (funcionários/administradores)
-Precisam de cadastro para acessar o sistema:
+Precisam de cadastro para acessar o sistema (via JWT):
 
 ##### Administrador Geral (Super Admin)
 - Acesso total a **todos os condomínios**
@@ -70,11 +73,13 @@ Precisam de cadastro para acessar o sistema:
 - Pode apenas concluir serviços que criou
 
 #### 2. Moradores (Acesso Livre - Sem Cadastro)
-- Não precisam de cadastro
+- **Não precisam de cadastro nem autenticação**
 - Escaneiam QR Codes com o smartphone
 - Apenas **visualizam** informações do local
+- **Podem escanear QR Codes de qualquer condomínio** (sem validação de escopo)
 - **Não podem** registrar serviços
-- **Não podem** acessar o sistema diretamente (apenas por link do QR Code)
+- **Não têm acesso ao sistema diretamente** (apenas via link do QR Code)
+- Acesso **anônimo e irrestrito** a informações públicas do local
 
 ### Tipos de Serviços/Eventos
 - **Limpeza**: Frequência (diária, semanal, mensal), responsável, checklist
@@ -161,7 +166,7 @@ qr_codes (
 -- Tabela de Auditoria de Acesso
 registros_acesso (
   id: UUID,
-  usuario_id: UUID,
+  usuario_id: UUID, -- NULL se acesso anônimo (morador)
   qr_code_id: UUID,
   condomino_id: UUID,
   endpoint: VARCHAR,
@@ -169,6 +174,7 @@ registros_acesso (
   codigo_resposta: INTEGER,
   ip_address: VARCHAR,
   user_agent: VARCHAR,
+  anônimo: BOOLEAN DEFAULT true, -- true para moradores (sem cadastro), false para cadastrados
   criado_em: TIMESTAMP
 )
 ```
@@ -182,71 +188,75 @@ O QR Code armazena apenas o ID único que aponta para o serviço/locak.atual
 ### Endpoint de Consulta Seguro (exemplo)
 
 ```javascript
-// API: GET /api/servicos/por-local/{localId}?pagina=1&tamanho=20
-// Requer: Authorization: Bearer <token>
-// Token deve conter: { condominoId, usuarioId, funcao }
+// API: GET /api/qrcode/{qr_code_id}
+// Requer: Nenhum (acesso anônimo para moradores)
+// Nota: Moradores podem escanear QR Codes de qualquer condomínio (sem validação de escopo)
 
-const obterServicosPorLocal = async (req, res) => {
-  const { localId } = req.params;
-  const { condominoId, usuarioId, funcao } = req.user; // do JWT
-  const pagina = parseInt(req.query.pagina) || 1;
-  const tamanho = parseInt(req.query.tamanho) || 20;
-  const offset = (pagina - 1) * tamanho;
+const obterServicosPorQRCode = async (req, res) => {
+  const { qr_code_id } = req.params;
 
   // 1. Validar UUID
-  if (!eUUIDValido(localId)) {
+  if (!eUUIDValido(qr_code_id)) {
     return res.status(400).json({ erro: 'ID inválido' });
   }
 
-  // 2. Buscar local e verificar condomínio
+  // 2. Buscar QR Code e relacionar com local (sem validação de condomínio para moradores)
+  const qrCode = await db.consulta(
+    'SELECT * FROM qr_codes WHERE id = $1 AND ativo = true',
+    [qr_code_id]
+  );
+
+  if (!qrCode) {
+    return res.status(404).json({ erro: 'QR Code não encontrado' });
+  }
+
+  // 3. Incrementar contagem de visualizações do QR Code
+  await db.consulta(
+    'UPDATE qr_codes SET visualizacoes = visualizacoes + 1 WHERE id = $1',
+    [qr_code_id]
+  );
+
+  // 4. Buscar dados do local
   const local = await db.consulta(
     'SELECT * FROM locais WHERE id = $1',
-    [localId]
+    [qrCode[0].local_id]
   );
 
   if (!local) {
     return res.status(404).json({ erro: 'Local não encontrado' });
   }
 
-  // 3. Validar escopo de condomínio (CRÍTICO)
-  if (local.condomino_id !== condominoId) {
-    registrarTentativaAcesso(usuarioId, localId, condominoId, 403);
-    return res.status(403).json({ 
-      erro: 'Acesso negado',
-      mensagem: 'Este QR Code não pertence ao seu condomínio'
-    });
-  }
-
-  // 4. Verificar limite de consultas
-  if (limiteConsultas.ehRateLimited(null, null)) {
-    return res.status(429).json({ erro: 'Limite de consultas excedido' });
-  }
-
-  // 5. Incrementar contagem de visualizações do QR Code
-  await db.consulta(
-    'UPDATE qr_codes SET visualizacoes = visualizacoes + 1 WHERE id = $1',
-    [local.qr_code_id]
+  // 5. Buscar dados do condomínio (apenas para exibição, sem validação de escopo)
+  const condomino = await db.consulta(
+    'SELECT id, nome FROM condominios WHERE id = $1',
+    [qrCode[0].condomino_id]
   );
 
   // 6. Buscar dados do local com paginação (mais recentes primeiro)
   const servicos = await db.consulta(
-    'SELECT * FROM servicos WHERE local_id = $1 ORDER BY criado_em DESC LIMIT $2 OFFSET $3',
-    [localId, tamanho, offset]
+    'SELECT * FROM servicos WHERE local_id = $1 ORDER BY criado_em DESC LIMIT $2',
+    [local[0].id, 20]
   );
 
-  // 7. Contar total de registros para paginação
-  const totalRegistros = await db.consulta(
-    'SELECT COUNT(*) FROM servicos WHERE local_id = $1',
-    [localId]
+  // 7. Registrar acesso anônimo (para auditoria)
+  registrarAcesso(
+    null, // usuário anônimo
+    local[0].id,
+    qrCode[0].condomino_id,
+    200,
+    req.ip,
+    req.headers['user-agent']
   );
 
   res.json({
     local: {
-      id: local.id,
-      nome: local.nome,
-      tipo: local.tipo,
-      qrCodeId: local.qr_code_id,
-      visualizacoes: local.visualizacoes || 0
+      id: local[0].id,
+      nome: local[0].nome,
+      tipo: local[0].tipo,
+      qrCodeId: qrCode[0].id,
+      condominoId: qrCode[0].condomino_id,
+      condominoNome: condomino[0]?.nome,
+      visualizacoes: qrCode[0].visualizacoes + 1 // +1 pela consulta atual
     },
     servicos: servicos.map(s => ({
       id: s.id,
@@ -257,13 +267,7 @@ const obterServicosPorLocal = async (req, res) => {
       concluidoEm: s.concluido_em,
       responsavel: s.responsavel,
       observacoes: s.observacoes
-    })),
-    pagina: {
-      atual: pagina,
-      tamanho: tamanho,
-      totalRegistros: totalRegistros[0].count,
-      totalPaginas: Math.ceil(totalRegistros[0].count / tamanho)
-    }
+    }))
   });
 };
 ```
@@ -354,11 +358,11 @@ GET /api/servicos/por-local/{localId}
 ```javascript
 // API: POST /api/servicos
 // Requer: Authorization: Bearer <token>
-// Token deve conter: { condominoId, usuarioId, funcao }
+// Token deve conter: { condominoId, usuarioId, funcao, geral }
 
 const registrarServico = async (req, res) => {
   const { localId, tipo, descricao, responsavel, observacoes } = req.body;
-  const { condominoId, usuarioId } = req.user;
+  const { condominoId, usuarioId, geral } = req.user;
 
   // 1. Validar dados de entrada
   if (!localId || !tipo || !responsavel) {
@@ -380,8 +384,9 @@ const registrarServico = async (req, res) => {
     return res.status(404).json({ erro: 'Local não encontrado' });
   }
 
-  // 4. Validar escopo de condomínio
-  if (local.condomino_id !== condominoId) {
+  // 4. Validar escopo de condomínio (CRÍTICO - apenas para usuários cadastrados)
+  // Moradores (anônimos) usam /api/qrcode/{qr_code_id} e NÃO têm esta validação
+  if (!geral && local[0].condomino_id !== condominoId) {
     return res.status(403).json({ 
       erro: 'Acesso negado',
       mensagem: 'Este local não pertence ao seu condomínio'
@@ -458,10 +463,11 @@ const registrarServico = async (req, res) => {
 ```javascript
 // API: PATCH /api/servicos/{servicoId}/concluir
 // Requer: Authorization: Bearer <token>
+// Token deve conter: { condominoId, usuarioId, geral }
 
 const concluirServico = async (req, res) => {
   const { servicoId } = req.params;
-  const { usuarioId, condominoId } = req.user;
+  const { usuarioId, condominoId, geral } = req.user;
   const { observacoes } = req.body;
 
   // 1. Buscar serviço
@@ -474,13 +480,14 @@ const concluirServico = async (req, res) => {
     return res.status(404).json({ erro: 'Serviço não encontrado' });
   }
 
-  // 2. Verificar se serviço pertence ao condomínio do usuário
+  // 2. Verificar se serviço pertence ao condomínio do usuário (CRÍTICO - apenas para usuários cadastrados)
+  // Moradores (anônimos) NÃO podem concluir serviços (apenas visualizam)
   const local = await db.consulta(
     'SELECT condomino_id FROM locais WHERE id = $1',
     [servico[0].local_id]
   );
 
-  if (local[0].condomino_id !== condominoId) {
+  if (!geral && local[0].condomino_id !== condominoId) {
     return res.status(403).json({ 
       erro: 'Acesso negado',
       mensagem: 'Este serviço não pertence ao seu condomínio'
@@ -488,7 +495,7 @@ const concluirServico = async (req, res) => {
   }
 
   // 3. Verificar se usuário é o responsável ou admin
-  if (servico[0].usuario_id !== usuarioId && !ehAdmin(condominoId, usuarioId)) {
+  if (servico[0].usuario_id !== usuarioId && !geral) {
     return res.status(403).json({ erro: 'Acesso negado' });
   }
 
@@ -567,7 +574,15 @@ const concluirServico = async (req, res) => {
 - Interface para moradores (apenas visualização) deve ser simples e rápida (sem login)
 - Interface para funcionários/administradores (registro de serviços) requer login
 - Acessibilidade (leitores de tela, contraste de cores)
-- **NUNCA confie no ID do path** - sempre validar condomínio no token e no banco para operações protegidas
+
+### Isolamento de Dados (CRÍTICO)
+- **Moradores (anônimos)**: Usam `/api/qrcode/{qr_code_id}`. **NÃO têm validação de condomínio**. Podem escanear QR Codes de qualquer condomínio.
+- **Funcionários/Administradores (cadastrados)**: Usam `/api/servicos/por-local/{localId}`, `/api/servicos`, `/api/servicos/{servicoId}/concluir`. **Têm validação obrigatória de condomínio**.
+- **Administrador Geral**: Tem acesso a todos os condomínios (chave `geral: true` no JWT).
+
+### Segurança de Validação
+- **NUNCA confie no ID do path** - sempre validar condomínio no token e no banco para operações de usuários cadastrados
+- Moradores **não precisam** validar condomínio porque acessam QR Codes públicos (sem restrição)
 - Implementar WAF (Web Application Firewall) para proteção contra ataques comuns
 - Sanitizar todos os inputs e outputs para prevenir XSS
 - Todos os nomes de variáveis, funções, endpoints e mensagens devem estar em português brasileiro
