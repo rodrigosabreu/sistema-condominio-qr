@@ -89,6 +89,80 @@ Precisam de cadastro para acessar o sistema (via JWT):
 - **Manutenção preventiva**: Agendamento, verificação, relatório
 - **Jardinagem/Horta**: Serviço realizado, plantio, colheita
 
+## Stack Tecnológica
+
+### Backend
+- **Linguagem**: C# (.NET 8)
+- **Framework**: ASP.NET Core Web API
+- **Banco de Dados**: PostgreSQL
+- **ORM**: Entity Framework Core
+
+### Bibliotecas Principais
+- **QR Code**: QRCoder (https://github.com/codebude/QRCoder)
+- **JWT**: System.IdentityModel.Tokens.Jwt (Microsoft oficial)
+- **Email**: SendGrid (SDK oficial: SendGrid.Extensions.DependencyInjection)
+- **Validação**: FluentValidation
+- **Logging**: Serilog
+- **Testes**: xUnit + Moq
+
+### Estrutura de Projeto
+```
+sistema-condominio-qr/
+├── src/
+│   ├── SistemaCondominio.Api/           # API (Controllers, Minimal APIs)
+│   ├── SistemaCondominio.Domain/        # Entidades, Enums, Interfaces
+│   ├── SistemaCondominio.Application/   # Services, DTOs, Validators
+│   ├── SistemaCondominio.Infrastructure/# EF Core, Repositories, External Services
+│   └── SistemaCondominio.Auth/          # JWT generation, Authentication
+├── tests/
+│   ├── SistemaCondominio.UnitTests/
+│   └── SistemaCondominio.IntegrationTests/
+├── docker-compose.yml                   # PostgreSQL + pgAdmin
+├── .env.example
+└── appsettings.json
+```
+
+### Comandos
+- `dotnet restore` - Restaurar dependências
+- `dotnet build` - Compilar projeto
+- `dotnet run --project src/SistemaCondominio.Api` - Rodar API em desenvolvimento
+- `dotnet test` - Rodar testes
+- `dotnet ef migrations add <Nome>` - Criar migration
+- `dotnet ef database update` - Aplicar migrations
+
+### Configuração (appsettings.json)
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5432;Database=condominios;Username=postgres;Password=senha"
+  },
+  "JwtSettings": {
+    "Secret": "sua-chave-secreta-aqui-min-32-caracteres",
+    "Issuer": "sistema-condominio",
+    "Audience": "sistema-condominio-api",
+    "ExpirationInMinutes": 480
+  },
+  "SendGrid": {
+    "ApiKey": "sua-api-key-sendgrid",
+    "FromEmail": "noreply@seudominio.com",
+    "FromName": "Sistema de Condomínios"
+  },
+  "RateLimiting": {
+    "PermitLimit": 100,
+    "WindowInSeconds": 60
+  }
+}
+```
+
+### Padrões de Arquitetura
+- **Clean Architecture**: Separação em Domain, Application, Infrastructure, API
+- **Dependency Injection**: Injeção de dependências via DI container do .NET
+- **Repository Pattern**: Repositórios para acesso a dados
+- **DTO Pattern**: Data Transfer Objects para entrada/saída de API
+- **Global Exception Handling**: Middleware para tratamento de erros
+- **JWT Authentication**: Middleware de autenticação JWT
+- **Rate Limiting**: Middleware para limitar requisições
+
 ## Padrões de Implementação
 
 ### Design de Banco de Dados
@@ -186,91 +260,94 @@ https://seudominio.com/qrcode/{qr_code_id}
 ```
 O QR Code armazena apenas o ID único que aponta para o serviço/locak.atual
 
-### Endpoint de Consulta Seguro (exemplo)
+### Endpoint de Consulta Anônimo (Exemplo em C#)
 
-```javascript
+```csharp
 // API: GET /api/qrcode/{qr_code_id}
 // Requer: Nenhum (acesso anônimo para moradores)
 // Nota: Moradores podem escanear QR Codes de qualquer condomínio (sem validação de escopo)
 
-const obterServicosPorQRCode = async (req, res) => {
-  const { qr_code_id } = req.params;
+[HttpGet("qrcode/{qrCodeId}")]
+[AllowAnonymous]
+public async Task<IActionResult> ObterPorQRCode(Guid qrCodeId, [FromServices] IQRCodeService qrCodeService)
+{
+    try
+    {
+        var resultado = await qrCodeService.ObterPorQRCodeAsync(qrCodeId);
+        return Ok(resultado);
+    }
+    catch (NotFoundException ex)
+    {
+        return NotFound(new { erro = ex.Message });
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Erro ao buscar QR Code");
+        return StatusCode(500, new { erro = "Erro interno do servidor" });
+    }
+}
 
-  // 1. Validar UUID
-  if (!eUUIDValido(qr_code_id)) {
-    return res.status(400).json({ erro: 'ID inválido' });
-  }
+// Service Implementation
+public async Task<QRCodeResponseDto> ObterPorQRCodeAsync(Guid qrCodeId)
+{
+    // 1. Validar UUID (já é Guid no parâmetro)
+    // 2. Buscar QR Code
+    var qrCode = await _qrCodeRepository.GetByIdAsync(qrCodeId);
+    if (qrCode == null || !qrCode.Ativo)
+        throw new NotFoundException("QR Code não encontrado");
 
-  // 2. Buscar QR Code e relacionar com local (sem validação de condomínio para moradores)
-  const qrCode = await db.consulta(
-    'SELECT * FROM qr_codes WHERE id = $1 AND ativo = true',
-    [qr_code_id]
-  );
+    // 3. Incrementar visualizações
+    qrCode.Visualizacoes++;
+    await _qrCodeRepository.UpdateAsync(qrCode);
 
-  if (!qrCode) {
-    return res.status(404).json({ erro: 'QR Code não encontrado' });
-  }
+    // 4. Buscar local
+    var local = await _localRepository.GetByIdAsync(qrCode.LocalId);
+    if (local == null)
+        throw new NotFoundException("Local não encontrado");
 
-  // 3. Incrementar contagem de visualizações do QR Code
-  await db.consulta(
-    'UPDATE qr_codes SET visualizacoes = visualizacoes + 1 WHERE id = $1',
-    [qr_code_id]
-  );
+    // 5. Buscar condomínio
+    var condominio = await _condominioRepository.GetByIdAsync(qrCode.CondominioId);
 
-  // 4. Buscar dados do local
-  const local = await db.consulta(
-    'SELECT * FROM locais WHERE id = $1',
-    [qrCode[0].local_id]
-  );
+    // 6. Buscar serviços (últimos 20)
+    var servicos = await _servicoRepository
+        .GetByLocalIdAsync(local.Id, 20);
 
-  if (!local) {
-    return res.status(404).json({ erro: 'Local não encontrado' });
-  }
+    // 7. Registrar acesso anônimo
+    await _acessoRepository.RegistrarAcessoAsync(
+        usuarioId: null,
+        localId: local.Id,
+        condominioId: qrCode.CondominioId,
+        statusCode: 200,
+        ipAddress: _httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString(),
+        userAgent: _httpContextAccessor.HttpContext?.Request.Headers["User-Agent"].ToString(),
+        anonimo: true
+    );
 
-  // 5. Buscar dados do condomínio (apenas para exibição, sem validação de escopo)
-  const condomino = await db.consulta(
-    'SELECT id, nome FROM condominios WHERE id = $1',
-    [qrCode[0].condomino_id]
-  );
-
-  // 6. Buscar dados do local com paginação (mais recentes primeiro)
-  const servicos = await db.consulta(
-    'SELECT * FROM servicos WHERE local_id = $1 ORDER BY criado_em DESC LIMIT $2',
-    [local[0].id, 20]
-  );
-
-  // 7. Registrar acesso anônimo (para auditoria)
-  registrarAcesso(
-    null, // usuário anônimo
-    local[0].id,
-    qrCode[0].condomino_id,
-    200,
-    req.ip,
-    req.headers['user-agent']
-  );
-
-  res.json({
-    local: {
-      id: local[0].id,
-      nome: local[0].nome,
-      tipo: local[0].tipo,
-      qrCodeId: qrCode[0].id,
-      condominoId: qrCode[0].condomino_id,
-      condominoNome: condomino[0]?.nome,
-      visualizacoes: qrCode[0].visualizacoes + 1 // +1 pela consulta atual
-    },
-    servicos: servicos.map(s => ({
-      id: s.id,
-      tipo: s.tipo,
-      descricao: s.descricao,
-      status: s.status,
-      agendadoEm: s.agendado_em,
-      concluidoEm: s.concluido_em,
-      responsavel: s.responsavel,
-      observacoes: s.observacoes
-    }))
-  });
-};
+    return new QRCodeResponseDto
+    {
+        Local = new LocalDto
+        {
+            Id = local.Id,
+            Nome = local.Nome,
+            Tipo = local.Tipo,
+            QrCodeId = qrCode.Id,
+            CondominioId = qrCode.CondominioId,
+            CondominioNome = condominio?.Nome,
+            Visualizacoes = qrCode.Visualizacoes
+        },
+        Servicos = servicos.Select(s => new ServicoDto
+        {
+            Id = s.Id,
+            Tipo = s.Tipo,
+            Descricao = s.Descricao,
+            Status = s.Status,
+            AgendadoEm = s.AgendadoEm,
+            ConcluidoEm = s.ConcluidoEm,
+            Responsavel = s.Responsavel,
+            Observacoes = s.Observacoes
+        }).ToList()
+    };
+}
 ```
 
 ### Estrutura de Resposta da API (Endpoint Anônimo)
@@ -357,297 +434,325 @@ GET /api/servicos/por-local/{localId}?pagina=1&tamanho=20
 - **Resposta**: Inclui metadata de paginação (`pagina.atual`, `pagina.totalPaginas`, etc.)
 - **Nota**: Paginação se aplica apenas a endpoints autenticados. Endpoint anônimo retorna fixo de 20 registros.
 
-### Endpoint Autenticado para Consulta (Exemplo)
+### Endpoint Autenticado para Consulta (Exemplo em C#)
 
-```javascript
+```csharp
 // API: GET /api/servicos/por-local/{localId}?pagina=1&tamanho=20
 // Requer: Authorization: Bearer <token>
 // Token deve conter: { condominoId, usuarioId, papel, geral }
 
-const obterServicosPorLocal = async (req, res) => {
-  const { localId } = req.params;
-  const { condominoId, usuarioId, papel, geral } = req.user;
-  const pagina = parseInt(req.query.pagina) || 1;
-  const tamanho = parseInt(req.query.tamanho) || 20;
-  const offset = (pagina - 1) * tamanho;
-
-  // 1. Validar UUID
-  if (!eUUIDValido(localId)) {
-    return res.status(400).json({ erro: 'ID inválido' });
-  }
-
-  // 2. Buscar local
-  const local = await db.consulta(
-    'SELECT * FROM locais WHERE id = $1',
-    [localId]
-  );
-
-  if (!local) {
-    return res.status(404).json({ erro: 'Local não encontrado' });
-  }
-
-  // 3. Validar escopo de condomínio (CRÍTICO)
-  if (!geral && local[0].condomino_id !== condominoId) {
-    registrarTentativaAcesso(usuarioId, localId, condominoId, 403);
-    return res.status(403).json({
-      erro: 'Acesso negado',
-      mensagem: 'Este local não pertence ao seu condomínio'
-    });
-  }
-
-  // 4. Verificar limite de consultas
-  if (limiteConsultas.ehRateLimited(usuarioId, condominoId)) {
-    return res.status(429).json({ erro: 'Limite de consultas excedido' });
-  }
-
-  // 5. Buscar dados do local com paginação
-  const servicos = await db.consulta(
-    'SELECT * FROM servicos WHERE local_id = $1 ORDER BY criado_em DESC LIMIT $2 OFFSET $3',
-    [localId, tamanho, offset]
-  );
-
-  // 6. Contar total de registros para paginação
-  const totalRegistros = await db.consulta(
-    'SELECT COUNT(*) FROM servicos WHERE local_id = $1',
-    [localId]
-  );
-
-  // 7. Registrar acesso
-  registrarAcesso(usuarioId, localId, condominoId, 200);
-
-  res.json({
-    local: {
-      id: local[0].id,
-      nome: local[0].nome,
-      tipo: local[0].tipo,
-      qrCodeId: local[0].qr_code_id,
-      condominoId: local[0].condomino_id
-    },
-    statusAtual: {
-      ultimoServico: servicos[0] ? {
-        tipo: servicos[0].tipo,
-        concluidoEm: servicos[0].concluido_em,
-        responsavel: servicos[0].responsavel
-      } : null,
-      interrupcaoAtual: null,
-      proximoAgendado: null
-    },
-    pagina: {
-      atual: pagina,
-      tamanho: tamanho,
-      totalRegistros: totalRegistros[0].count,
-      totalPaginas: Math.ceil(totalRegistros[0].count / tamanho)
+[HttpGet("servicos/por-local/{localId}")]
+[Authorize]
+public async Task<IActionResult> ObterServicosPorLocal(
+    Guid localId,
+    [FromQuery] int pagina = 1,
+    [FromQuery] int tamanho = 20,
+    [FromServices] IServicoService servicoService)
+{
+    try
+    {
+        var tokenData = _jwtService.ObterDadosToken(HttpContext.User);
+        var resultado = await servicoService.ObterPorLocalAsync(
+            localId,
+            pagina,
+            tamanho,
+            tokenData.CondominioId,
+            tokenData.UsuarioId,
+            tokenData.Geral
+        );
+        return Ok(resultado);
     }
-  });
-};
+    catch (ForbiddenException ex)
+    {
+        return StatusCode(403, new { erro = "Acesso negado", mensagem = ex.Message });
+    }
+    catch (NotFoundException ex)
+    {
+        return NotFound(new { erro = ex.Message });
+    }
+    catch (RateLimitExceededException)
+    {
+        return StatusCode(429, new { erro = "Limite de consultas excedido" });
+    }
+}
+
+// Service Implementation
+public async Task<ServicosPorLocalResponseDto> ObterPorLocalAsync(
+    Guid localId,
+    int pagina,
+    int tamanho,
+    Guid? condominioIdToken,
+    Guid usuarioId,
+    bool geral)
+{
+    // 1. Validar parâmetros de paginação
+    if (pagina < 1) pagina = 1;
+    if (tamanho < 1 || tamanho > 100) tamanho = 20;
+    var offset = (pagina - 1) * tamanho;
+
+    // 2. Buscar local
+    var local = await _localRepository.GetByIdAsync(localId);
+    if (local == null)
+        throw new NotFoundException("Local não encontrado");
+
+    // 3. Validar escopo de condomínio (CRÍTICO)
+    if (!geral && local.CondominioId != condominioIdToken)
+    {
+        await _acessoRepository.RegistrarTentativaAcessoAsync(
+            usuarioId, localId, condominioIdToken, 403);
+        throw new ForbiddenException("Este local não pertence ao seu condomínio");
+    }
+
+    // 4. Verificar rate limiting
+    if (_rateLimitService.IsRateLimited(usuarioId, condominioIdToken))
+        throw new RateLimitExceededException();
+
+    // 5. Buscar serviços com paginação
+    var (servicos, total) = await _servicoRepository
+        .GetByLocalIdPaginadoAsync(localId, tamanho, offset);
+
+    // 6. Registrar acesso
+    await _acessoRepository.RegistrarAcessoAsync(
+        usuarioId, localId, local.CondominioId, 200);
+
+    return new ServicosPorLocalResponseDto
+    {
+        Local = new LocalDto
+        {
+            Id = local.Id,
+            Nome = local.Nome,
+            Tipo = local.Tipo,
+            QrCodeId = local.QrCodeId,
+            CondominioId = local.CondominioId
+        },
+        StatusAtual = new StatusAtualDto
+        {
+            UltimoServico = servicos.FirstOrDefault() != null ? new ServicoResumoDto
+            {
+                Tipo = servicos.First().Tipo,
+                ConcluidoEm = servicos.First().ConcluidoEm,
+                Responsavel = servicos.First().Responsavel
+            } : null,
+            InterrupcaoAtual = null,
+            ProximoAgendado = null
+        },
+        Pagina = new PaginacaoDto
+        {
+            Atual = pagina,
+            Tamanho = tamanho,
+            TotalRegistros = total,
+            TotalPaginas = (int)Math.Ceiling((double)total / tamanho)
+        }
+    };
+}
 ```
 
-### Endpoint para Registrar Evento (ex: concluir limpeza)
+### Endpoint para Registrar Evento (Exemplo em C#)
 
-```javascript
+```csharp
 // API: POST /api/servicos
 // Requer: Authorization: Bearer <token>
 // Token deve conter: { condominoId, usuarioId, papel, geral }
-// onde:
-//   - papel: 'administrador' | 'funcionario'
-//   - geral: boolean (true para Super Admin, false para outros)
 
-const registrarServico = async (req, res) => {
-  const { localId, tipo, descricao, responsavel, observacoes } = req.body;
-  const { condominoId, usuarioId, papel, geral } = req.user;
-
-  // 1. Validar dados de entrada
-  if (!localId || !tipo || !responsavel) {
-    return res.status(400).json({ erro: 'Campos obrigatórios ausentes' });
-  }
-
-  // 2. Validar UUID do local
-  if (!eUUIDValido(localId)) {
-    return res.status(400).json({ erro: 'ID do local inválido' });
-  }
-
-  // 3. Buscar local e verificar condomínio
-  const local = await db.consulta(
-    'SELECT * FROM locais WHERE id = $1',
-    [localId]
-  );
-
-  if (!local) {
-    return res.status(404).json({ erro: 'Local não encontrado' });
-  }
-
-  // 4. Validar escopo de condomínio (CRÍTICO - apenas para usuários cadastrados)
-  // Moradores (anônimos) usam /api/qrcode/{qr_code_id} e NÃO têm esta validação
-  if (!geral && local[0].condomino_id !== condominoId) {
-    return res.status(403).json({ 
-      erro: 'Acesso negado',
-      mensagem: 'Este local não pertence ao seu condomínio'
-    });
-  }
-
-  // 5. Verificar se usuário tem permissão para registrar (usuário comum ou admin)
-  const usuario = await db.consulta(
-    'SELECT * FROM usuarios WHERE id = $1',
-    [usuarioId]
-  );
-
-  if (!usuario || usuario[0].ativo === false) {
-    return res.status(403).json({ erro: 'Usuário não autorizado' });
-  }
-
-  // 6. Insert do serviço
-  const novoServico = await db.consulta(
-    `INSERT INTO servicos (local_id, usuario_id, tipo, descricao, responsavel, observacoes, status)
-     VALUES ($1, $2, $3, $4, $5, $6, 'agendado')
-     RETURNING *`,
-    [localId, usuarioId, tipo, descricao, responsavel, observacoes]
-  );
-
-  registrarAcesso(usuarioId, localId, condominoId, 201);
-
-  // 7. Enviar notificação por email para administradores do condomínio
-  try {
-    const administradores = await db.consulta(
-      `SELECT u.email, u.nome 
-       FROM usuarios u 
-       WHERE u.condomino_id = $1 
-       AND u.ativo = true 
-       AND EXISTS (
-         SELECT 1 FROM papeis p 
-         WHERE p.id = u.papel_id 
-         AND p.nivel_acesso >= 50
-       )`,
-      [condominoId]
-    );
-
-    for (const admin of administradores) {
-      await enviarEmail({
-        para: admin.email,
-        assunto: `Novo Serviço Registrado em ${local[0].nome}`,
-        corpo: `O funcionário ${usuario[0].nome} registrou um novo serviço em ${local[0].nome}:\n\n` +
-               `Tipo: ${tipo}\n` +
-               `Descrição: ${descricao}\n` +
-               `Responsável: ${responsavel}\n` +
-               `\nAcesse o sistema para mais detalhes.`
-      });
+[HttpPost("servicos")]
+[Authorize]
+public async Task<IActionResult> RegistrarServico(
+    [FromBody] RegistrarServicoRequestDto request,
+    [FromServices] IServicoService servicoService)
+{
+    try
+    {
+        var tokenData = _jwtService.ObterDadosToken(HttpContext.User);
+        var resultado = await servicoService.RegistrarAsync(
+            request,
+            tokenData.CondominioId,
+            tokenData.UsuarioId,
+            tokenData.Geral
+        );
+        return StatusCode(201, resultado);
     }
-  } catch (erroEmail) {
-    console.error('Falha ao enviar notificações:', erroEmail);
-    // Não falhar o request por erro de email
-  }
-
-  res.status(201).json({
-    mensagem: 'Serviço registrado com sucesso',
-    servico: {
-      id: novoServico[0].id,
-      localId: novoServico[0].local_id,
-      tipo: novoServico[0].tipo,
-      descricao: novoServico[0].descricao,
-      responsavel: novoServico[0].responsavel,
-      status: novoServico[0].status
+    catch (ValidationException ex)
+    {
+        return BadRequest(new { erro = ex.Message });
     }
-  });
-};
+    catch (ForbiddenException ex)
+    {
+        return StatusCode(403, new { erro = "Acesso negado", mensagem = ex.Message });
+    }
+}
+
+// DTO Request
+public class RegistrarServicoRequestDto
+{
+    public Guid LocalId { get; set; }
+    public TipoServico Tipo { get; set; }
+    public string Descricao { get; set; }
+    public string Responsavel { get; set; }
+    public string Observacoes { get; set; }
+}
+
+// Service Implementation
+public async Task<ServicoResponseDto> RegistrarAsync(
+    RegistrarServicoRequestDto request,
+    Guid? condominioIdToken,
+    Guid usuarioId,
+    bool geral)
+{
+    // 1. Validar dados de entrada (FluentValidation)
+    var validationResult = await _validator.ValidateAsync(request);
+    if (!validationResult.IsValid)
+        throw new ValidationException(validationResult.Errors.First().ErrorMessage);
+
+    // 2. Buscar local
+    var local = await _localRepository.GetByIdAsync(request.LocalId);
+    if (local == null)
+        throw new NotFoundException("Local não encontrado");
+
+    // 3. Validar escopo de condomínio
+    if (!geral && local.CondominioId != condominioIdToken)
+        throw new ForbiddenException("Este local não pertence ao seu condomínio");
+
+    // 4. Verificar se usuário tem permissão
+    var usuario = await _usuarioRepository.GetByIdAsync(usuarioId);
+    if (usuario == null || !usuario.Ativo)
+        throw new ForbiddenException("Usuário não autorizado");
+
+    // 5. Criar serviço
+    var novoServico = new Servico
+    {
+        Id = Guid.NewGuid(),
+        LocalId = request.LocalId,
+        UsuarioId = usuarioId,
+        Tipo = request.Tipo,
+        Descricao = request.Descricao,
+        Responsavel = request.Responsavel,
+        Observacoes = request.Observacoes,
+        Status = StatusServico.Agendado,
+        CriadoEm = DateTime.UtcNow
+    };
+
+    await _servicoRepository.AddAsync(novoServico);
+
+    // 6. Registrar acesso
+    await _acessoRepository.RegistrarAcessoAsync(
+        usuarioId, local.Id, local.CondominioId, 201);
+
+    // 7. Enviar notificações (background task)
+    _ = Task.Run(() => _emailService.EnviarNotificacaoNovoServicoAsync(
+        local.CondominioId,
+        local.Nome,
+        usuario.Nome,
+        request.Tipo,
+        request.Descricao,
+        request.Responsavel
+    ));
+
+    return new ServicoResponseDto
+    {
+        Id = novoServico.Id,
+        LocalId = novoServico.LocalId,
+        Tipo = novoServico.Tipo,
+        Descricao = novoServico.Descricao,
+        Responsavel = novoServico.Responsavel,
+        Status = novoServico.Status
+    };
+}
 ```
 
-### Endpoint para Concluir Serviço (Função do Funcionário)
+### Endpoint para Concluir Serviço (Exemplo em C#)
 
-```javascript
+```csharp
 // API: PATCH /api/servicos/{servicoId}/concluir
 // Requer: Authorization: Bearer <token>
 // Token deve conter: { condominoId, usuarioId, papel, geral }
-// onde:
-//   - papel: 'administrador' | 'funcionario'
-//   - geral: boolean (true para Super Admin, false para outros)
 
-const concluirServico = async (req, res) => {
-  const { servicoId } = req.params;
-  const { usuarioId, condominoId, papel, geral } = req.user;
-  const { observacoes } = req.body;
-
-  // 1. Buscar serviço
-  const servico = await db.consulta(
-    'SELECT * FROM servicos WHERE id = $1',
-    [servicoId]
-  );
-
-  if (!servico) {
-    return res.status(404).json({ erro: 'Serviço não encontrado' });
-  }
-
-  // 2. Verificar se serviço pertence ao condomínio do usuário (CRÍTICO - apenas para usuários cadastrados)
-  // Moradores (anônimos) NÃO podem concluir serviços (apenas visualizam)
-  const local = await db.consulta(
-    'SELECT condomino_id FROM locais WHERE id = $1',
-    [servico[0].local_id]
-  );
-
-  if (!geral && local[0].condomino_id !== condominoId) {
-    return res.status(403).json({ 
-      erro: 'Acesso negado',
-      mensagem: 'Este serviço não pertence ao seu condomínio'
-    });
-  }
-
-  // 3. Verificar se usuário é o responsável ou admin
-  if (servico[0].usuario_id !== usuarioId && !geral) {
-    return res.status(403).json({ erro: 'Acesso negado' });
-  }
-
-  // 4. Atualizar serviço
-  const servicoAtualizado = await db.consulta(
-    `UPDATE servicos SET status = 'concluido', concluido_em = NOW(), observacoes = $1
-     WHERE id = $2 RETURNING *`,
-    [observacoes, servicoId]
-  );
-
-  // 5. Enviar notificação para administradores do condomínio
-  try {
-    const administradores = await db.consulta(
-      `SELECT u.email, u.nome 
-       FROM usuarios u 
-       WHERE u.condomino_id = $1 
-       AND u.ativo = true 
-       AND EXISTS (
-         SELECT 1 FROM papeis p 
-         WHERE p.id = u.papel_id 
-         AND p.nivel_acesso >= 50
-       )`,
-      [condominoId]
-    );
-
-    const localInfo = await db.consulta(
-      'SELECT nome FROM locais WHERE id = $1',
-      [servicoAtualizado[0].local_id]
-    );
-
-    const usuarioInfo = await db.consulta(
-      'SELECT nome FROM usuarios WHERE id = $1',
-      [usuarioId]
-    );
-
-    for (const admin of administradores) {
-      await enviarEmail({
-        para: admin.email,
-        assunto: `Serviço Concluído em ${localInfo[0].nome}`,
-        corpo: `O funcionário ${usuarioInfo[0].nome} concluiu o serviço em ${localInfo[0].nome}:\n\n` +
-               `Tipo: ${servicoAtualizado[0].tipo}\n` +
-               `Descrição: ${servicoAtualizado[0].descricao}\n` +
-               `Responsável: ${servicoAtualizado[0].responsavel}\n` +
-               `Observações: ${observacoes}\n` +
-               `\nAcesse o sistema para mais detalhes.`
-      });
+[HttpPatch("servicos/{servicoId}/concluir")]
+[Authorize]
+public async Task<IActionResult> ConcluirServico(
+    Guid servicoId,
+    [FromBody] ConcluirServicoRequestDto request,
+    [FromServices] IServicoService servicoService)
+{
+    try
+    {
+        var tokenData = _jwtService.ObterDadosToken(HttpContext.User);
+        var resultado = await servicoService.ConcluirAsync(
+            servicoId,
+            request.Observacoes,
+            tokenData.CondominioId,
+            tokenData.UsuarioId,
+            tokenData.Geral
+        );
+        return Ok(resultado);
     }
-  } catch (erroEmail) {
-    console.error('Falha ao enviar notificações de conclusão:', erroEmail);
-    // Não falhar o request por erro de email
-  }
+    catch (ForbiddenException ex)
+    {
+        return StatusCode(403, new { erro = "Acesso negado", mensagem = ex.Message });
+    }
+    catch (NotFoundException ex)
+    {
+        return NotFound(new { erro = ex.Message });
+    }
+}
 
-  res.json({
-    mensagem: 'Serviço concluído com sucesso',
-    servico: servicoAtualizado[0]
-  });
-};
+// DTO Request
+public class ConcluirServicoRequestDto
+{
+    public string Observacoes { get; set; }
+}
+
+// Service Implementation
+public async Task<ServicoResponseDto> ConcluirAsync(
+    Guid servicoId,
+    string observacoes,
+    Guid? condominioIdToken,
+    Guid usuarioId,
+    bool geral)
+{
+    // 1. Buscar serviço
+    var servico = await _servicoRepository.GetByIdAsync(servicoId);
+    if (servico == null)
+        throw new NotFoundException("Serviço não encontrado");
+
+    // 2. Verificar se serviço pertence ao condomínio do usuário
+    var local = await _localRepository.GetByIdAsync(servico.LocalId);
+    if (!geral && local.CondominioId != condominioIdToken)
+        throw new ForbiddenException("Este serviço não pertence ao seu condomínio");
+
+    // 3. Verificar se usuário é o responsável ou admin
+    if (servico.UsuarioId != usuarioId && !geral)
+        throw new ForbiddenException("Acesso negado");
+
+    // 4. Atualizar serviço
+    servico.Status = StatusServico.Concluido;
+    servico.ConcluidoEm = DateTime.UtcNow;
+    servico.Observacoes = observacoes;
+
+    await _servicoRepository.UpdateAsync(servico);
+
+    // 5. Enviar notificações (background task)
+    _ = Task.Run(() => _emailService.EnviarNotificacaoServicoConcluidoAsync(
+        local.CondominioId,
+        local.Nome,
+        usuarioId,
+        servico.Tipo,
+        servico.Descricao,
+        servico.Responsavel,
+        observacoes
+    ));
+
+    return new ServicoResponseDto
+    {
+        Id = servico.Id,
+        LocalId = servico.LocalId,
+        Tipo = servico.Tipo,
+        Descricao = servico.Descricao,
+        Responsavel = servico.Responsavel,
+        Status = servico.Status,
+        ConcluidoEm = servico.ConcluidoEm,
+        Observacoes = servico.Observacoes
+    };
+}
 ```
 
 ## Requisitos de Qualidade
@@ -737,25 +842,62 @@ Todos os endpoints autenticados requerem um JWT Bearer token com o seguinte sche
 - Ao concluir um serviço, todos os **administradores do mesmo condomínio** recebem notificação
 - **Administradores de outros condomínios NÃO recebem notificações indevidas**
 
-### Implementação Segura
-```javascript
-const administradores = await db.consulta(
-  `SELECT u.email, u.nome 
-   FROM usuarios u 
-   WHERE u.condomino_id = $1  -- Filtro por condomínio do evento
-   AND u.ativo = true 
-   AND EXISTS (
-     SELECT 1 FROM papeis p 
-     WHERE p.id = u.papel_id 
-     AND p.nivel_acesso >= 50  -- Apenas administradores
-   )`,
-  [condominoId]  // O condomínio do evento, nunca o do usuário autenticado
-);
+### Implementação Segura (C#)
+
+```csharp
+public class EmailService : IEmailService
+{
+    private readonly ISendGridClient _sendGridClient;
+    private readonly IConfiguration _configuration;
+
+    public async Task EnviarNotificacaoNovoServicoAsync(
+        Guid condominioId,
+        string localNome,
+        string usuarioNome,
+        TipoServico tipo,
+        string descricao,
+        string responsavel)
+    {
+        // CRÍTICO: Buscar administradores do condomínio do EVENTO (não do usuário)
+        var administradores = await _usuarioRepository
+            .GetAdministradoresPorCondominioAsync(condominioId);
+
+        foreach (var admin in administradores)
+        {
+            var mensagem = new SendGridMessage
+            {
+                From = new EmailAddress(_configuration["SendGrid:FromEmail"],
+                                       _configuration["SendGrid:FromName"]),
+                Subject = $"Novo Serviço Registrado em {localNome}",
+                PlainTextContent = $"O funcionário {usuarioNome} registrou um novo serviço em {localNome}:\n\n" +
+                                  $"Tipo: {tipo}\n" +
+                                  $"Descrição: {descricao}\n" +
+                                  $"Responsável: {responsavel}\n\n" +
+                                  $"Acesse o sistema para mais detalhes."
+            };
+
+            mensagem.AddTo(new EmailAddress(admin.Email, admin.Nome));
+
+            await _sendGridClient.SendEmailAsync(mensagem);
+        }
+    }
+}
+
+// Repository Implementation
+public async Task<List<Usuario>> GetAdministradoresPorCondominioAsync(Guid condominioId)
+{
+    return await _context.Usuarios
+        .Where(u => u.CondominioId == condominioId
+                && u.Ativo
+                && u.Papel.NivelAcesso >= 50)  // Apenas administradores
+        .Include(u => u.Papel)
+        .ToListAsync();
+}
 ```
 
 ### Pontos Críticos de Segurança
-1. **NUNCA usar** `req.user.condominoId` para filtrar destinatários
-2. **Sempre usar** `local.condomino_id` ou `servico.condomino_id` (do banco de dados)
+1. **NUNCA usar** `tokenData.CondominioId` para filtrar destinatários
+2. **Sempre usar** `local.CondominioId` ou `servico.CondominioId` (do banco de dados)
 3. Validar que o condomínio do evento pertence ao usuário autenticado antes de enviar
 4. Logs de envio de email devem incluir `condomino_id` para auditoria
 5. Sistema deve ter rate limiting por email para prevenir abuso
