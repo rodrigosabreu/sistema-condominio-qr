@@ -130,6 +130,96 @@ sistema-condominio-qr/
 - `dotnet ef migrations add <Nome>` - Criar migration
 - `dotnet ef database update` - Aplicar migrations
 
+### Ambiente de Desenvolvimento Local
+
+#### Docker Compose (Recomendado para Banco de Dados)
+
+Usar Docker Compose para PostgreSQL local:
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:14-alpine
+    container_name: condominio-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: condominios
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: condominio-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@condominio.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
+```
+
+**Comandos Docker:**
+```bash
+# Subir containers
+docker-compose up -d
+
+# Verificar status
+docker-compose ps
+
+# Ver logs
+docker-compose logs postgres
+
+# Parar containers
+docker-compose down
+
+# Parar e remover volumes
+docker-compose down -v
+```
+
+#### String de Conexão Local
+
+```json
+// appsettings.Development.json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5432;Database=condominios;Username=postgres;Password=postgres"
+  }
+}
+```
+
+#### IDE Recomendada
+
+**Visual Studio 2022 Community** (Gratuito)
+- Melhor para projetos .NET
+- Debugger integrado
+- Test runner integrado
+
+**VS Code** (Leve)
+- Extensão: C# Dev Kit
+- Extensão: .NET Install Tool
+- Extensão: PostgreSQL
+
+#### Ferramentas Adicionais
+
+- **Postman** ou **Insomnia** - Para testar API
+- **pgAdmin** - Para gerenciar banco (já incluído no docker-compose em http://localhost:5050)
+- **DBeaver** - Alternativa multi-banco
+
 ### Configuração (appsettings.json)
 ```json
 {

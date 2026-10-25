@@ -83,8 +83,24 @@ Para mais informações sobre engenharia agêntica, veja as postagens no LinkedI
 
 ### Pré-requisitos
 - .NET 8 SDK
-- PostgreSQL 14+
-- Docker (opcional, para banco de dados local)
+- Docker e Docker Compose (para PostgreSQL local)
+- IDE: Visual Studio 2022 Community ou VS Code com C# Dev Kit
+
+### Setup do Banco de Dados Local
+
+Usar Docker Compose para PostgreSQL:
+
+```bash
+# Subir PostgreSQL e pgAdmin
+docker-compose up -d
+
+# Verificar se está rodando
+docker-compose ps
+
+# Acessar pgAdmin em http://localhost:5050
+# Email: admin@condominio.local
+# Senha: admin
+```
 
 ### Comandos Iniciais
 ```bash
@@ -92,25 +108,89 @@ Para mais informações sobre engenharia agêntica, veja as postagens no LinkedI
 git clone https://github.com/rodrigosabreu/sistema-condominio-qr.git
 cd sistema-condominio-qr
 
+# Subir banco de dados
+docker-compose up -d
+
+# Criar estrutura de projetos (seguindo AGENTS.md)
+dotnet new sln -n SistemaCondominio
+dotnet new webapi -n SistemaCondominio.Api
+dotnet new classlib -n SistemaCondominio.Domain
+dotnet new classlib -n SistemaCondominio.Application
+dotnet new classlib -n SistemaCondominio.Infrastructure
+dotnet new classlib -n SistemaCondominio.Auth
+
+# Adicionar projetos à solução
+dotnet sln add SistemaCondominio.Api/SistemaCondominio.Api.csproj
+dotnet sln add SistemaCondominio.Domain/SistemaCondominio.Domain.csproj
+dotnet sln add SistemaCondominio.Application/SistemaCondominio.Application.csproj
+dotnet sln add SistemaCondominio.Infrastructure/SistemaCondominio.Infrastructure.csproj
+dotnet sln add SistemaCondominio.Auth/SistemaCondominio.Auth.csproj
+
+# Adicionar referências entre projetos
+dotnet add SistemaCondominio.Api reference SistemaCondominio.Application SistemaCondominio.Auth
+dotnet add SistemaCondominio.Application reference SistemaCondominio.Domain
+dotnet add SistemaCondominio.Infrastructure reference SistemaCondominio.Domain
+dotnet add SistemaCondominio.Auth reference SistemaCondominio.Domain
+
+# Instalar pacotes NuGet
+dotnet add SistemaCondominio.Infrastructure package Microsoft.EntityFrameworkCore.Design
+dotnet add SistemaCondominio.Infrastructure package Npgsql.EntityFrameworkCore.PostgreSQL
+dotnet add SistemaCondominio.Infrastructure package QRCoder
+dotnet add SistemaCondominio.Api package Microsoft.AspNetCore.Authentication.JwtBearer
+dotnet add SistemaCondominio.Api package SendGrid.Extensions.DependencyInjection
+dotnet add SistemaCondominio.Api package Serilog.AspNetCore
+dotnet add SistemaCondominio.Application package FluentValidation
+
 # Restaurar dependências
 dotnet restore
 
-# Criar e aplicar migrations (quando implementado)
-dotnet ef migrations add InitialCreate
-dotnet ef database update
+# Criar e aplicar migrations (quando tiver o DbContext)
+dotnet ef migrations add InitialCreate --project SistemaCondominio.Infrastructure --startup-project SistemaCondominio.Api
+dotnet ef database update --project SistemaCondominio.Infrastructure --startup-project SistemaCondominio.Api
 
 # Rodar API em desenvolvimento
-dotnet run --project src/SistemaCondominio.Api
+dotnet run --project SistemaCondominio.Api
 
 # Rodar testes
 dotnet test
 ```
 
 ### Configuração de Ambiente
-1. Copiar `appsettings.json` para `appsettings.Development.json`
-2. Configurar string de conexão do PostgreSQL
-3. Configurar chave secreta para JWT
-4. Configurar API key do SendGrid
+
+1. **Configurar `appsettings.Development.json`:**
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5432;Database=condominios;Username=postgres;Password=postgres"
+  },
+  "JwtSettings": {
+    "Secret": "sua-chave-secreta-aqui-min-32-caracteres",
+    "Issuer": "sistema-condominio",
+    "Audience": "sistema-condominio-api",
+    "ExpirationInMinutes": 480
+  },
+  "SendGrid": {
+    "ApiKey": "sua-api-key-sendgrid",
+    "FromEmail": "noreply@seudominio.com",
+    "FromName": "Sistema de Condomínios"
+  }
+}
+```
+
+2. **Configurar JWT:**
+- Gerar uma chave secreta de pelo menos 32 caracteres
+- Usar em desenvolvimento (em produção usar variáveis de ambiente)
+
+3. **Configurar SendGrid (opcional para desenvolvimento):**
+- Criar conta gratuita no SendGrid
+- Obter API Key
+- Configurar em `appsettings.Development.json`
+
+### Ferramentas de Desenvolvimento
+
+- **Postman** ou **Insomnia** - Para testar endpoints da API
+- **pgAdmin** - http://localhost:5050 (já incluído no docker-compose)
+- **DBeaver** - Alternativa para gerenciar banco de dados
 
 ## Requisitos de Qualidade
 
