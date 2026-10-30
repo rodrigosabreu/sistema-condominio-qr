@@ -39,13 +39,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={aviso.id}
             role="status"
-            className={`toast-entrada pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium shadow-2xl backdrop-blur-xl ${
+            className={`toast-entrada pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-lg border bg-white px-4 py-3 text-sm font-medium shadow-lg ${
               aviso.tom === 'sucesso'
-                ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-100'
-                : 'border-rose-400/40 bg-rose-500/15 text-rose-100'
+                ? 'border-emerald-200 text-emerald-800'
+                : 'border-red-200 text-red-800'
             }`}
           >
-            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${aviso.tom === 'sucesso' ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${aviso.tom === 'sucesso' ? 'bg-emerald-500' : 'bg-red-500'}`} />
             {aviso.texto}
           </div>
         ))}

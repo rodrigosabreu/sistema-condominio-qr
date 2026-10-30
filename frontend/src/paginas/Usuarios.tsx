@@ -114,17 +114,17 @@ export function Usuarios() {
         <Vazio titulo="Nenhum usuário cadastrado" />
       ) : (
         <Cartao className="overflow-hidden p-0">
-          <ul className="divide-y divide-white/5">
+          <ul className="divide-y divide-slate-100">
             {lista.map((u, i) => (
-              <li key={u.id} className="pagina-entrada flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between" style={{ animationDelay: `${i * 0.03}s` }}>
+              <li key={u.id} className="pagina-entrada flex flex-col gap-3 p-5 transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between" style={{ animationDelay: `${i * 0.03}s` }}>
                 <div className="flex min-w-0 items-center gap-4">
-                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-violet-500 to-cyan-400 font-display text-lg font-bold text-white">
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-indigo-50 text-lg font-semibold text-indigo-700">
                     {u.nome.charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate font-semibold text-white">{u.nome}</p>
-                    <p className="truncate text-sm text-slate-400">{u.email}</p>
-                    <p className="truncate text-xs text-slate-500">
+                    <p className="truncate font-medium text-slate-900">{u.nome}</p>
+                    <p className="truncate text-sm text-slate-500">{u.email}</p>
+                    <p className="truncate text-xs text-slate-400">
                       {[geral && (nomeCondominio(u.condominioId) ?? 'Sem condomínio'), u.unidade && `Unidade ${u.unidade}`].filter(Boolean).join(' · ')}
                     </p>
                   </div>
@@ -183,12 +183,12 @@ export function Usuarios() {
             </Campo>
           </div>
           {modal.editando && (
-            <label className="flex min-h-12 items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4">
-              <input type="checkbox" className="h-5 w-5 accent-fuchsia-500" checked={form.ativo} onChange={(e) => setForm({ ...form, ativo: e.target.checked })} />
-              <span className="text-sm text-slate-200">Usuário ativo (pode entrar no sistema)</span>
+            <label className="flex min-h-12 items-center gap-3 rounded-lg border border-slate-200 bg-white px-4">
+              <input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={form.ativo} onChange={(e) => setForm({ ...form, ativo: e.target.checked })} />
+              <span className="text-sm text-slate-700">Usuário ativo (pode entrar no sistema)</span>
             </label>
           )}
-          {erro && <p className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{erro}</p>}
+          {erro && <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>}
           <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
             <Botao variante="secundario" onClick={fechar}>Cancelar</Botao>
             <Botao type="submit" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar'}</Botao>

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relatório — Experiência com AI-DLC</title>
+<style>
+  :root { --primary:#4f46e5; --ok:#059669; --warn:#d97706; --err:#dc2626; --border:#e2e8f0; --muted:#64748b; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter',system-ui,sans-serif; background:#f8fafc; color:#0f172a; line-height:1.65; }
+  .wrap { max-width:860px; margin:0 auto; padding:48px 24px 80px; }
+  header.rh { border-bottom:1px solid var(--border); padding-bottom:28px; margin-bottom:36px; }
+  .tag { display:inline-block; background:#eef2ff; color:var(--primary); font-size:12px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; padding:5px 12px; border-radius:999px; margin-bottom:14px; }
+  h1 { font-size:30px; letter-spacing:-.02em; font-weight:700; }
+  .sub { color:var(--muted); margin-top:8px; font-size:15px; }
+  h2 { font-size:20px; margin:40px 0 14px; font-weight:700; letter-spacing:-.01em; display:flex; align-items:center; gap:10px; }
+  h2::before { content:''; width:4px; height:22px; background:var(--primary); border-radius:2px; }
+  h3 { font-size:15px; margin:22px 0 8px; font-weight:600; }
+  p { margin:10px 0; font-size:14.5px; }
+  ul,ol { margin:10px 0 10px 22px; font-size:14.5px; }
+  li { margin:5px 0; }
+  .card { background:#fff; border:1px solid var(--border); border-radius:12px; padding:20px 22px; margin:14px 0; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+  table { width:100%; border-collapse:collapse; font-size:13.5px; margin:12px 0; background:#fff; border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  th { text-align:left; background:#f1f5f9; font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; color:#475569; padding:10px 14px; }
+  td { padding:10px 14px; border-top:1px solid var(--border); vertical-align:top; }
+  tr:first-child td { border-top:none; }
+  code { background:#f1f5f9; padding:2px 6px; border-radius:5px; font-size:12.5px; font-family:ui-monospace,Consolas,monospace; }
+  pre { background:#0f172a; color:#e2e8f0; padding:14px 16px; border-radius:10px; overflow-x:auto; font-size:12.5px; margin:12px 0; font-family:ui-monospace,Consolas,monospace; }
+  .ok { color:var(--ok); font-weight:600; }
+  .warn { color:var(--warn); font-weight:600; }
+  .err { color:var(--err); font-weight:600; }
+  .pill { display:inline-block; font-size:11px; font-weight:600; padding:2px 9px; border-radius:999px; }
+  .pill.ok { background:#ecfdf5; color:var(--ok); }
+  .pill.err { background:#fef2f2; color:var(--err); }
+  .pill.warn { background:#fffbeb; color:var(--warn); }
+  .quote { border-left:3px solid var(--primary); background:#eef2ff55; padding:12px 16px; border-radius:0 10px 10px 0; margin:14px 0; font-size:14px; color:#334155; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media(max-width:640px){ .grid2{grid-template-columns:1fr} }
+  footer { margin-top:48px; padding-top:20px; border-top:1px solid var(--border); color:var(--muted); font-size:12.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="rh">
+  <span class="tag">Relatório de Experiência</span>
+  <h1>AI-DLC na prática: redesign de frontend guiado por ciclo de vida agêntico</h1>
+  <p class="sub">Projeto: sistema-condominio-qr · React 19 + Vite + Tailwind 4 + .NET 8 · AI-DLC 2.11.2 · Harness: Kiro IDE · 30/10/2026</p>
+</header>
+
+<h2>1. O objetivo</h2>
+<p>Testar a metodologia <strong>AI-DLC (AI-Driven Development Life Cycle)</strong> da AWS em um caso real: o frontend do sistema de condomínios com QR Codes tinha um visual (dark roxo/ciano com glassmorphism) que não agradava. A meta era avaliar se um ciclo de vida estruturado para IA — com planejamento, gates humanos e auditoria — entrega um resultado melhor e mais controlado do que o uso ad-hoc de assistentes de código.</p>
+<p>A tarefa concreta: <strong>redesign completo do visual</strong> mantendo React 19 + Tailwind 4 e toda a lógica de negócio, rotas, autenticação JWT e integração com a API .NET.</p>
+
+<h2>2. A jornada</h2>
+
+<h3>2.1 Setup</h3>
+<ul>
+  <li>Instalação via <code>irm .../install.ps1 | iex</code>. Adaptado para o Git Bash com funções <code>irm</code>/<code>iex</code> delegando ao PowerShell (descoberta: Git Bash carrega <code>~/.bash_profile</code>, não <code>~/.bashrc</code>).</li>
+  <li><code>aidlc config --harness kiro-ide</code> gerou o harness <code>.kiro/</code> (skills, agentes, hooks) e o workspace <code>aidlc/</code> (memória, intents, auditoria). <code>aidlc doctor</code>: 51 checks OK, com aviso de caminho longo (101 + ~185 chars &gt; limite de 260 do Windows).</li>
+</ul>
+
+<h3>2.2 Execução</h3>
+<ul>
+  <li>Plano <code>feature</code> (33 estágios) escolhido entre 11 perfis; intent <code>frontend-redesign</code> criado.</li>
+  <li>Etapa de elaboração ("Mob Elaboration"): a IA fez 10 perguntas sobre negócio, usuários e métricas — documentadas como requisitos antes de qualquer código.</li>
+  <li><strong>Bug encontrado:</strong> o agente criou a seção de confirmação com formato errado, entrando em loop infinito no gate. Destravei manualmente depurando o código-fonte do motor e corrigindo o arquivo + registrando o checkpoint via CLI.</li>
+  <li><strong>Kiro ficou sem tokens</strong> no meio do code-generation. O workflow foi retomado 100% via CLI do engine (<code>aidlc engine orchestrate next</code>, <code>log review</code>, <code>orchestrate report</code>) — prova de que o estado é realmente portátil.</li>
+  <li>O primeiro plano de código propôs <strong>o mesmo visual rejeitado</strong>. No gate de aprovação, registrei <em>Request Changes</em> com a direção "claro corporativo", gerei um mockup HTML de preview, o usuário aprovou, e o plano foi revisado antes de uma linha de código ser escrita.</li>
+  <li>Redesign implementado: 12 arquivos, novo design system (indigo <code>#4f46e5</code>, fundo claro, sidebar escura, sem glassmorphism). <code>typecheck</code> e <code>vite build</code>: PASS.</li>
+  <li>Revisão adversarial por subagente: veredito <strong>READY</strong>, com 1 major (contrato de testes sem runner — aceito conscientemente no gate).</li>
+  <li>Stages concluídos: <code>code-generation</code> e <code>build-and-test</code> (2/10 do pipeline Construction). O estágio <code>ci-pipeline</code> travou num loop de cerimônia (ordem estrita entre confirmação de resumo e escrita auditada de artefatos — depende de hooks do harness).</li>
+  <li>Validação final real: Docker Desktop iniciado via CLI, Postgres healthy, API .NET no ar com login JWT funcionando, frontend servindo em <code>:5173</code>.</li>
+</ul>
+
+<h2>3. Erros encontrados</h2>
+<table>
+  <tr><th>Problema</th><th>Impacto</th><th>Resolução</th></tr>
+  <tr><td><span class="pill err">Bug/fragilidade</span> Agente gerou seção de confirmação com nome/formato errado → loop infinito de gate, mensagens de erro genéricas</td><td>Usuário travado sem saber o que responder</td><td>Debug no código do motor (<code>aidlc-lib.ts</code>); correção manual do formato + <code>log decision/answer</code></td></tr>
+  <tr><td><span class="pill err">Cota</span> Kiro IDE sem tokens no meio do estágio crítico</td><td>Workflow interrompido</td><td>Continuação via CLI do engine (estado portátil funcionou)</td></tr>
+  <tr><td><span class="pill warn">Qualidade</span> Plano inicial reproduzia o visual que o usuário não gostava (respostas genéricas no intent)</td><td>Redesign seria "mais do mesmo"</td><td>Gate de aprovação capturou → Request Changes → preview → novo plano</td></tr>
+  <tr><td><span class="pill warn">Rigidez</span> Cerimônia muito estrita: seção exata, ordem evento→resposta→escrita, validação de hash</td><td>Sem hooks do harness, gates viram quebra-cabeça manual</td><td>Simulação do hook <code>person-message</code>; estágio ci-pipeline ficou pendente</td></tr>
+  <tr><td><span class="pill warn">Ambiente</span> Limite de 260 chars do Windows (pasta do curso longa)</td><td>Aviso de falha futura</td><td>LongPathsEnabled sugerido ao usuário</td></tr>
+  <tr><td><span class="pill warn">Contrato</span> Escopo <code>feature</code> exigia Vitest + 80% cobertura; projeto sem test runner</td><td>Finding major na revisão</td><td>Aceito conscientemente no gate humano</td></tr>
+</table>
+
+<h2>4. Acertos e benefícios observados</h2>
+<div class="grid2">
+  <div class="card">
+    <h3>🧠 Memória real</h3>
+    <p>Regras em camadas (org→time→projeto→fase) versionadas no git, carregadas em todo estágio. Decisões ficam no projeto, não no chat.</p>
+  </div>
+  <div class="card">
+    <h3>🚦 Gates que funcionam</h3>
+    <p>O gate de aprovação de plano <strong>salvou o redesign</strong>: impediu regenerar o visual errado e canalizou a direção "claro corporativo" antes do código.</p>
+  </div>
+  <div class="card">
+    <h3>📜 Auditoria de verdade</h3>
+    <p>Cada pergunta, resposta, decisão e escrita vira evento no audit shard com receipts verificáveis (hashes, autorizações).</p>
+  </div>
+  <div class="card">
+    <h3>🔄 Estado portátil</h3>
+    <p>O workflow sobreviveu à morte do harness: Kiro sem tokens → continuei pelo motor CLI sem perder nada. Isso é arquitetura, não acidente.</p>
+  </div>
+  <div class="card">
+    <h3>🔍 Review adversarial</h3>
+    <p>Segundo agente revisou o trabalho e achou problemas reais (testes ausentes, contraste WCAG, fonte morta) — decididos no gate, não escondidos.</p>
+  </div>
+  <div class="card">
+    <h3>🗣️ Contexto linguístico</h3>
+    <p>Perguntas, resumos e artefatos gerados em pt-BR corretamente — a memória registra e respeita o idioma da conversa.</p>
+  </div>
+</div>
+
+<h2>5. Comparação: chat ad-hoc vs AI-DLC</h2>
+<table>
+  <tr><th></th><th>Chat ad-hoc</th><th>AI-DLC</th></tr>
+  <tr><td>Contexto</td><td>Perde quando a conversa acaba</td><td>Persiste no repo (memória + intents + audit)</td></tr>
+  <tr><td>Decisões</td><td>Implícitas, misturadas no texto</td><td>Gates explícitos, receipts verificáveis</td></tr>
+  <tr><td>Plano errado</td><td>Codifica errado e você descobre depois</td><td>Você aprova o plano <em>antes</em> do código</td></tr>
+  <tr><td>Interrupção</td><td>Recomeça do zero</td><td>Retoma do <code>aidlc-state.md</code></td></tr>
+  <tr><td>Equipe</td><td>Cada um usa de um jeito</td><td>Mesmas regras/memória para todos via git</td></tr>
+  <tr><td>Custo</td><td>Barato por turno</td><td>Cerimônia custa tokens + atrito (e cota acabou no meio)</td></tr>
+</table>
+
+<h2>6. Veredito</h2>
+<div class="quote">
+O AI-DLC cumpre a promessa central: <strong>transforma o assistente de "gerador de código" em "processo de engenharia"</strong>. O redesign saiu melhor <em>por causa</em> dos gates — a direção visual errada foi pega no plano, não no código. O preço é fricção: cerimônia rígida, formato de arquivos exigente e dependência dos hooks do harness — quando a cota do Kiro acabou, operar o motor na mão virou trabalho de especialista. Para times que valorizam rastreabilidade e controle (e têm cota de sobra), o modelo é forte. Para uso rápido e casual, a burocracia pesa.
+</div>
+
+<h2>7. Resultado entregue</h2>
+<ul>
+  <li><span class="ok">✔</span> Novo visual claro corporativo: 12 arquivos, typecheck + build PASS</li>
+  <li><span class="ok">✔</span> Stack 100% funcional: Postgres (Docker), API .NET com JWT, front em <code>:5173</code></li>
+  <li><span class="ok">✔</span> Registros do workflow: intents, receipts, review e auditoria em <code>aidlc/</code></li>
+  <li><span class="warn">◐</span> 2/10 estágios de Construction concluídos; demais são documentais (CI/deploy/ops) — retomáveis no Kiro</li>
+  <li><span class="warn">◐</span> Dívida aceita: sem testes automatizados (finding R-01)</li>
+</ul>
+
+<footer>Relatório gerado em 30/10/2026 · sistema-condominio-qr · AI-DLC 2.11.2 (awslabs/aidlc-workflows)</footer>
+</div>
+</body>
+</html>

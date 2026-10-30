@@ -158,38 +158,35 @@ export function Servicos() {
 
           {dados && (
             <section className="grid gap-4 md:grid-cols-3">
-              <Cartao className="relative overflow-hidden">
-                <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-emerald-400/30 blur-2xl" />
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Última conclusão</p>
-                <p className="mt-2 font-display text-xl font-bold text-white">
+              <Cartao>
+                <p className="text-xs font-medium uppercase tracking-widest text-slate-500">Última conclusão</p>
+                <p className="mt-2 text-lg font-semibold tracking-tight text-slate-900">
                   {dados.statusAtual.ultimoServico ? TIPOS_SERVICO[dados.statusAtual.ultimoServico.tipo] : 'Nenhuma ainda'}
                 </p>
-                <p className="mt-1 text-sm text-slate-400">
+                <p className="mt-1 text-sm text-slate-500">
                   {dados.statusAtual.ultimoServico ? `${formatarData(dados.statusAtual.ultimoServico.concluidoEm)} · ${dados.statusAtual.ultimoServico.responsavel ?? '—'}` : ' '}
                 </p>
               </Cartao>
-              <Cartao className="relative overflow-hidden">
-                <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-violet-400/30 blur-2xl" />
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Próximo agendado</p>
-                <p className="mt-2 font-display text-xl font-bold text-white">
+              <Cartao>
+                <p className="text-xs font-medium uppercase tracking-widest text-slate-500">Próximo agendado</p>
+                <p className="mt-2 text-lg font-semibold tracking-tight text-slate-900">
                   {dados.statusAtual.proximoAgendado ? TIPOS_SERVICO[dados.statusAtual.proximoAgendado.tipo] : 'Nada agendado'}
                 </p>
-                <p className="mt-1 text-sm text-slate-400">{dados.statusAtual.proximoAgendado ? formatarData(dados.statusAtual.proximoAgendado.agendadoEm) : ' '}</p>
+                <p className="mt-1 text-sm text-slate-500">{dados.statusAtual.proximoAgendado ? formatarData(dados.statusAtual.proximoAgendado.agendadoEm) : ' '}</p>
               </Cartao>
-              <Cartao className="relative overflow-hidden">
-                <div className={`absolute -right-6 -top-6 h-24 w-24 rounded-full blur-2xl ${dados.statusAtual.interrupcaoAtual ? 'bg-rose-400/40' : 'bg-cyan-400/20'}`} />
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Interrupção</p>
-                <p className="mt-2 font-display text-xl font-bold text-white">
+              <Cartao>
+                <p className="text-xs font-medium uppercase tracking-widest text-slate-500">Interrupção</p>
+                <p className="mt-2 text-lg font-semibold tracking-tight text-slate-900">
                   {dados.statusAtual.interrupcaoAtual ? TIPOS_SERVICO[dados.statusAtual.interrupcaoAtual.tipo] : 'Sem interrupções'}
                 </p>
-                <p className="mt-1 text-sm text-slate-400">{dados.statusAtual.interrupcaoAtual?.descricao ?? ' '}</p>
+                <p className="mt-1 text-sm text-slate-500">{dados.statusAtual.interrupcaoAtual?.descricao ?? ' '}</p>
               </Cartao>
             </section>
           )}
 
           <section className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-display text-xl font-bold text-white">Histórico</h2>
+              <h2 className="text-lg font-semibold tracking-tight text-slate-900">Histórico</h2>
               {dados && <p className="text-sm text-slate-500">{dados.pagina.totalRegistros} registro(s)</p>}
             </div>
 
@@ -198,23 +195,23 @@ export function Servicos() {
             ) : !dados || dados.servicos.length === 0 ? (
               <Vazio titulo="Nenhum serviço registrado" descricao="Use o botão “Registrar serviço” para começar o histórico deste local." />
             ) : (
-              <ol className={`relative space-y-4 border-l border-white/10 pl-6 transition ${carregando ? 'opacity-50' : ''}`}>
+              <ol className={`relative space-y-4 border-l border-slate-200 pl-6 transition ${carregando ? 'opacity-50' : ''}`}>
                 {dados.servicos.map((s, i) => {
                   const pode = podeEditarServico(usuario, s);
                   return (
                     <li key={s.id} className="pagina-entrada relative" style={{ animationDelay: `${i * 0.04}s` }}>
-                      <span className={`absolute -left-[31px] top-6 h-3.5 w-3.5 rounded-full ring-4 ring-slate-950 ${s.status === 'concluido' ? 'bg-emerald-400' : 'bg-violet-400'}`} />
+                      <span className={`absolute -left-[31px] top-6 h-3.5 w-3.5 rounded-full ring-4 ring-slate-50 ${s.status === 'concluido' ? 'bg-emerald-500' : 'bg-indigo-500'}`} />
                       <Cartao className="p-5">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-display text-lg font-bold text-white">{TIPOS_SERVICO[s.tipo]}</span>
+                          <span className="text-lg font-semibold tracking-tight text-slate-900">{TIPOS_SERVICO[s.tipo]}</span>
                           <Badge tom={tomStatus[s.status]}>{STATUS_SERVICO[s.status]}</Badge>
                         </div>
-                        {s.descricao && <p className="mt-2 text-slate-200">{s.descricao}</p>}
-                        <p className="mt-2 text-xs text-slate-500">
+                        {s.descricao && <p className="mt-2 text-slate-700">{s.descricao}</p>}
+                        <p className="mt-2 text-xs text-slate-400">
                           {s.responsavel ? `${s.responsavel} · ` : ''}
                           {s.concluidoEm ? `Concluído em ${formatarData(s.concluidoEm)}` : s.agendadoEm ? `Agendado para ${formatarData(s.agendadoEm)}` : 'Registrado'}
                         </p>
-                        {s.observacoes && <p className="mt-2 rounded-xl bg-white/5 px-3 py-2 text-sm text-slate-300">{s.observacoes}</p>}
+                        {s.observacoes && <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">{s.observacoes}</p>}
                         {pode && (
                           <div className="mt-4 flex flex-wrap gap-2">
                             <Botao variante="secundario" className="min-h-12" onClick={() => abrirEdicao(s)}>Editar</Botao>
@@ -233,7 +230,7 @@ export function Servicos() {
             {dados && totalPaginas > 1 && (
               <div className="flex items-center justify-between gap-3 pt-2">
                 <Botao variante="secundario" disabled={pagina <= 1} onClick={() => setPagina((p) => p - 1)}>Anterior</Botao>
-                <span className="text-sm text-slate-400">Página {pagina} de {totalPaginas}</span>
+                <span className="text-sm text-slate-500">Página {pagina} de {totalPaginas}</span>
                 <Botao variante="secundario" disabled={pagina >= totalPaginas} onClick={() => setPagina((p) => p + 1)}>Próxima</Botao>
               </div>
             )}
@@ -244,11 +241,11 @@ export function Servicos() {
       <Modal titulo={modal.tipo === 'novo' ? 'Registrar serviço' : modal.tipo === 'editar' ? 'Editar serviço' : 'Concluir serviço'} aberto={modal.tipo !== null} onFechar={fechar}>
         {modal.tipo === 'concluir' ? (
           <form onSubmit={salvar} className="space-y-4">
-            <p className="text-sm text-slate-300">Confirme a conclusão de <strong className="text-white">{modal.servico && TIPOS_SERVICO[modal.servico.tipo]}</strong>.</p>
+            <p className="text-sm text-slate-600">Confirme a conclusão de <strong className="text-slate-900">{modal.servico && TIPOS_SERVICO[modal.servico.tipo]}</strong>.</p>
             <Campo rotulo="Observações da conclusão (opcional)">
               <Textarea maxLength={2000} value={observacoesConclusao} onChange={(e) => setObservacoesConclusao(e.target.value)} />
             </Campo>
-            {erro && <p className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{erro}</p>}
+            {erro && <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>}
             <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
               <Botao variante="secundario" onClick={fechar}>Voltar</Botao>
               <Botao type="submit" disabled={salvando}>{salvando ? 'Concluindo…' : 'Confirmar conclusão'}</Botao>
@@ -279,7 +276,7 @@ export function Servicos() {
                 <Input maxLength={2000} value={form.observacoes} onChange={(e) => setForm({ ...form, observacoes: e.target.value })} />
               </Campo>
             </div>
-            {erro && <p className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{erro}</p>}
+            {erro && <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>}
             <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
               <Botao variante="secundario" onClick={fechar}>Cancelar</Botao>
               <Botao type="submit" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar'}</Botao>

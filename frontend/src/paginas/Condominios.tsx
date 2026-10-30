@@ -86,17 +86,16 @@ export function Condominios() {
       ) : (
         <div className="grid gap-5 md:grid-cols-2">
           {lista.map((c, i) => (
-            <Cartao key={c.id} className="pagina-entrada relative overflow-hidden" >
+            <Cartao key={c.id} className="pagina-entrada" >
               <div style={{ animationDelay: `${i * 0.05}s` }}>
-                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-cyan-400" />
                 <div className="flex items-start justify-between gap-3">
-                  <h3 className="font-display text-2xl font-bold text-white">{c.nome}</h3>
+                  <h3 className="text-xl font-semibold tracking-tight text-slate-900">{c.nome}</h3>
                   <Badge tom={c.ativo ? 'verde' : 'vermelho'}>{c.ativo ? 'Ativo' : 'Inativo'}</Badge>
                 </div>
                 <dl className="mt-5 grid gap-2 text-sm">
-                  <div className="flex justify-between gap-4"><dt className="text-slate-500">CNPJ</dt><dd className="text-slate-200">{formatarCnpj(c.cnpj)}</dd></div>
-                  <div className="flex justify-between gap-4"><dt className="text-slate-500">Endereço</dt><dd className="text-right text-slate-200">{c.endereco ?? '—'}</dd></div>
-                  <div className="flex justify-between gap-4"><dt className="text-slate-500">Telefone</dt><dd className="text-slate-200">{c.telefone ?? '—'}</dd></div>
+                  <div className="flex justify-between gap-4"><dt className="text-slate-500">CNPJ</dt><dd className="text-slate-700">{formatarCnpj(c.cnpj)}</dd></div>
+                  <div className="flex justify-between gap-4"><dt className="text-slate-500">Endereço</dt><dd className="text-right text-slate-700">{c.endereco ?? '—'}</dd></div>
+                  <div className="flex justify-between gap-4"><dt className="text-slate-500">Telefone</dt><dd className="text-slate-700">{c.telefone ?? '—'}</dd></div>
                 </dl>
                 {podeEditarCondominio(usuario, c.id) && (
                   <Botao variante="secundario" className="mt-5 w-full" onClick={() => abrirEdicao(c)}>
@@ -124,13 +123,13 @@ export function Condominios() {
             <Input type="tel" maxLength={20} value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} />
           </Campo>
           {podeCadastrarCondominio(usuario) && (
-            <label className="flex min-h-12 items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4">
-              <input type="checkbox" className="h-5 w-5 accent-fuchsia-500" checked={form.ativo} onChange={(e) => setForm({ ...form, ativo: e.target.checked })} />
-              <span className="text-sm text-slate-200">Condomínio ativo</span>
+            <label className="flex min-h-12 items-center gap-3 rounded-lg border border-slate-200 bg-white px-4">
+              <input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={form.ativo} onChange={(e) => setForm({ ...form, ativo: e.target.checked })} />
+              <span className="text-sm text-slate-700">Condomínio ativo</span>
             </label>
           )}
           {ehEdicaoAdminDoCondominio && <p className="text-xs text-slate-500">Somente o Administrador Geral pode ativar ou desativar condomínios.</p>}
-          {erro && <p className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{erro}</p>}
+          {erro && <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>}
           <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
             <Botao variante="secundario" onClick={fechar}>Cancelar</Botao>
             <Botao type="submit" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar'}</Botao>

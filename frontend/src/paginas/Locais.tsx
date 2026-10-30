@@ -126,8 +126,8 @@ export function Locais() {
       <Cabecalho titulo="Locais" subtitulo={admin ? 'Cada local possui um QR Code exclusivo para os moradores.' : 'Locais do seu condomínio.'}>
         {admin && (
           <>
-            <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-slate-300">
-              <input type="checkbox" className="h-5 w-5 accent-fuchsia-500" checked={mostrarInativos} onChange={(e) => setMostrarInativos(e.target.checked)} />
+            <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 text-sm text-slate-600">
+              <input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={mostrarInativos} onChange={(e) => setMostrarInativos(e.target.checked)} />
               Mostrar inativos
             </label>
             <Botao onClick={abrirNovo}>Novo local</Botao>
@@ -146,8 +146,8 @@ export function Locais() {
                   <Badge tom="violeta">{TIPOS_LOCAL[l.tipo]}</Badge>
                   <Badge tom={l.ativo ? 'verde' : 'vermelho'}>{l.ativo ? 'Ativo' : 'Inativo'}</Badge>
                 </div>
-                <h3 className="mt-4 font-display text-xl font-bold text-white">{l.nome}</h3>
-                <p className="mt-1 text-sm text-slate-400">
+                <h3 className="mt-4 text-lg font-semibold tracking-tight text-slate-900">{l.nome}</h3>
+                <p className="mt-1 text-sm text-slate-500">
                   {geral && nomeCondominio(l.condominioId) ? `${nomeCondominio(l.condominioId)} · ` : ''}
                   {l.andar != null ? `${l.andar}º andar` : 'Área comum'}
                 </p>
@@ -194,12 +194,12 @@ export function Locais() {
             </Campo>
           </div>
           {modal.editando && (
-            <label className="flex min-h-12 items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4">
-              <input type="checkbox" className="h-5 w-5 accent-fuchsia-500" checked={form.ativo} onChange={(e) => setForm({ ...form, ativo: e.target.checked })} />
-              <span className="text-sm text-slate-200">Local ativo (visível aos moradores)</span>
+            <label className="flex min-h-12 items-center gap-3 rounded-lg border border-slate-200 bg-white px-4">
+              <input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={form.ativo} onChange={(e) => setForm({ ...form, ativo: e.target.checked })} />
+              <span className="text-sm text-slate-700">Local ativo (visível aos moradores)</span>
             </label>
           )}
-          {erro && <p className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{erro}</p>}
+          {erro && <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p>}
           <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
             <Botao variante="secundario" onClick={fechar}>Cancelar</Botao>
             <Botao type="submit" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar'}</Botao>
