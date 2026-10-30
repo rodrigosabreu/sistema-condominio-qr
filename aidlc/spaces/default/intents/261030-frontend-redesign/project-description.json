@@ -1,0 +1,1 @@
+"Redesenhar completamente o visual do frontend (pasta frontend/), mantendo React 19 + Vite + Tailwind 4 e toda a lógica de negócio, rotas, autenticação e integração com a API .NET. Quero um novo design system (paleta, tipografia, componentes) moderno e consistente, aplicado em todas as páginas: Login, Painel, Condomínios, Locais, Serviços, Usuários e QrPublico."

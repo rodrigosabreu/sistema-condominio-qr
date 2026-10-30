@@ -1,0 +1,35 @@
+{
+  "intent": "261030-frontend-redesign",
+  "stage": "code-generation",
+  "phase": "construction",
+  "artifacts": [
+    "code-generation-plan.md",
+    "unit-test-instructions.md",
+    "code-summary.md"
+  ],
+  "code_outputs": [
+    "frontend/src/index.css",
+    "frontend/src/componentes/ui.tsx",
+    "frontend/src/componentes/Layout.tsx",
+    "frontend/src/componentes/Toast.tsx",
+    "frontend/src/componentes/QrCodeDialog.tsx",
+    "frontend/src/paginas/Login.tsx",
+    "frontend/src/paginas/Painel.tsx",
+    "frontend/src/paginas/Condominios.tsx",
+    "frontend/src/paginas/Locais.tsx",
+    "frontend/src/paginas/Servicos.tsx",
+    "frontend/src/paginas/Usuarios.tsx",
+    "frontend/src/paginas/QrPublico.tsx"
+  ],
+  "downstream": [
+    "build-and-test"
+  ],
+  "created_at": "2026-10-30T00:00:00Z",
+  "updated_at": "2026-10-30T21:45:00Z",
+  "created_by": "ai-dlc",
+  "upstream_ids": [
+    "intent-statement",
+    "project-description",
+    "code-generation-plan"
+  ]
+}
