@@ -92,7 +92,7 @@ Precisam de cadastro para acessar o sistema (via JWT):
 ## Stack Tecnológica
 
 ### Backend
-- **Linguagem**: C# (.NET 8)
+- **Linguagem**: C# (.NET 10)
 - **Framework**: ASP.NET Core Web API
 - **Banco de Dados**: PostgreSQL
 - **ORM**: Entity Framework Core
@@ -112,8 +112,8 @@ Precisam de cadastro para acessar o sistema (via JWT):
 - **QR Code**: QRCoder (https://github.com/codebude/QRCoder)
 - **JWT**: System.IdentityModel.Tokens.Jwt (Microsoft oficial)
 - **Email**: SendGrid (SDK oficial: SendGrid.Extensions.DependencyInjection)
-- **Validação**: FluentValidation
-- **Logging**: Serilog
+- **Validação**: Validação manual (`Validacao.cs` em `Application`) — *FluentValidation listado como pendência no PROGRESSO.md*
+- **Logging**: Logging padrão do .NET — *Serilog listado como pendência no PROGRESSO.md*
 - **Testes**: xUnit + Moq
 
 ### Estrutura de Projeto
@@ -135,6 +135,33 @@ sistema-condominio-qr/
 ├── setup.sh / setup.bat                 # Scripts históricos de criação da estrutura
 └── AGENTS.md, README.md, PROGRESSO.md
 ```
+
+---
+
+## 🔗 Integração com Agentic Home (Skills Compartilhadas)
+
+Este projeto pode usar as skills compartilhadas do `agentic-home`:
+
+```bash
+# No Hermes Agent, carregue skills conforme necessário:
+skill_view(name='descoberta')    # Exploração de problemas & requisitos
+skill_view(name='arquitetura')   # Design técnico, trade-offs, ADRs
+skill_view(name='desenvolvimento') # Padrões de implementação, testes, CI/CD
+skill_view(name='qualidade')     # Validação, testes, revisão de código, observabilidade
+```
+
+**Templates disponíveis no Home:**
+- `agentic-home/templates/handoff.md` — Template de handoff de tarefa (append-only)
+- `agentic-home/templates/adr.md` — Template de ADR (decisões arquiteturais)
+
+**Como usar:**
+1. Clone o `agentic-home` e leia seu `AGENTS.md`
+2. Navegue pelo catálogo: `cat projects/catalogo.md`
+3. Carregue skills relevantes antes de iniciar trabalho
+4. Crie/atualize `handoff.md` na raiz deste projeto para cada tarefa (seguindo template da Home)
+5. Atualize o handoff conforme progride (append-only)
+
+---
 
 ### Comandos
 - `dotnet restore` - Restaurar dependências
@@ -1054,6 +1081,28 @@ public async Task<List<Usuario>> GetAdministradoresPorCondominioAsync(Guid condo
 3. Sistema busca administradores do condomínio X (não de Y ou Z)
 4. Emails enviados apenas para administradores de X
 5. Registro de envio em `registros_acesso` com `condomino_id: X`
+
+---
+
+## 📋 Orientação para Handoffs por Tarefa
+
+Para cada tarefa neste projeto:
+
+1. **Crie/atualize** `handoff.md` na raiz do projeto usando o template: `agentic-home/templates/handoff.md`
+2. **Preencha** os campos obrigatórios:
+   - Identificador e descrição da tarefa
+   - Projeto, Owner, Status
+   - Aprovado (decisão, data, aprovador)
+   - Aguardando (dependências/bloqueadores)
+   - Próxima ação (explícita e executável)
+   - Artefatos (caminhos reais)
+   - Histórico (append-only)
+   - Validação (checks executados, resultados, pendentes)
+3. **Não sobrescreva** histórico anterior — apenas apende
+4. **Referencie** artefatos reais (caminhos absolutos ou relativos ao repo)
+5. **Não marque como aprovado** sem evidência (link para PR, testes, registro de aprovação)
+
+---
 
 <!-- BEGIN AI-DLC:agents -->
 This project uses AI-DLC (AI-Driven Development Life Cycle) for structured development. Harness-specific setup, commands, and prerequisites live in each harness's own onboarding file (see Harness onboarding below).
