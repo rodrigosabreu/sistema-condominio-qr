@@ -18,17 +18,17 @@ Substituir a validação manual por **FluentValidation** de forma incremental, c
 
 ### Incluído (MVP desta discovery)
 
-1. Adicionar pacote `FluentValidation.AspNetCore` ao projeto `SistemaCondominio.Api`
-2. Criar validators para os principais DTOs de **request** (command/input):
-   - `RegistrarCondominioRequestDto` / `AtualizarCondominioRequestDto`
-   - `RegistrarLocalRequestDto` / `AtualizarLocalRequestDto`
-   - `RegistrarUsuarioRequestDto` / `AtualizarUsuarioRequestDto` / `TrocarSenhaRequestDto`
-   - `RegistrarServicoRequestDto` / `AtualizarServicoRequestDto` / `ConcluirServicoRequestDto`
-   - `LoginRequestDto`
-3. Registrar validators no DI (`builder.Services.AddValidatorsFromAssemblyContaining<Program>()`)
-4. Configurar pipeline para retornar `ValidationProblemDetails` (RFC 7807) com status 400 — manter contrato atual (`{ "erro": "...", "mensagem": "..." }` ou array de erros) via `ConfigureApiBehaviorOptions` ou middleware customizado
+1. Adicionar pacote `FluentValidation` (base, não AspNetCore) ao projeto `SistemaCondominio.Application`
+2. Criar validators para os principais DTOs de **request** (command/input) — **nomes reais do código**:
+   - `CondominioRequest` (compartilhado create/update; regras condicionais)
+   - `LocalRequest` (compartilhado create/update)
+   - `UsuarioRequest` (compartilhado create/update; senha obrigatória no create, opcional no update)
+   - `RegistrarServicoRequest` / `AtualizarServicoRequest` / `ConcluirServicoRequest`
+   - `LoginRequest`
+3. Registrar validators no DI da API explicitamente (`builder.Services.AddValidatorsFromAssemblyContaining<CondominioRequestValidator>()` etc.) — **não usar scanning automático do AspNetCore**
+4. Configurar pipeline para manter contrato atual (`{ "erro": "...", "mensagem": "..." }` — primeiro erro) via middleware customizado ou `IResult` customizado; loggar todos erros internamente para auditoria
 5. Remover chamadas manuais de `Validacao.*` nos services correspondentes, delegando ao FluentValidation
-6. Garantir que mensagens de erro permaneçam em **português brasileiro** e claras (ex.: "CNPJ deve conter 14 dígitos numéricos")
+6. Garantir que mensagens de erro permaneçam em **português brasileiro** e claras, **alinhadas ao código atual** (`Validacao.cs`)
 7. Validar que todos os cenários de permissão existentes (Etapa 5 do PROGRESSO.md) continuem passando
 
 ### Fora de escopo (explicitamente excluído)
@@ -39,6 +39,8 @@ Substituir a validação manual por **FluentValidation** de forma incremental, c
 - Serilog (outra pendência separada)
 - Atualização do `Microsoft.OpenApi` (pendência separada)
 - Notificações por e-mail / histórico 12 meses (pendências maiores)
+- `TrocarSenhaRequestDto` — não existe; troca de senha integrada na edição de usuário
+- `FluentValidation.AspNetCore` — não usar; integração MVC não aplica a Minimal APIs
 
 ## Requisitos
 
@@ -46,8 +48,8 @@ Substituir a validação manual por **FluentValidation** de forma incremental, c
 
 | ID | Requisito | Prioridade |
 |----|-----------|------------|
-| RF01 | Validators cobrem todos os DTOs de request listados no escopo | Must |
-| RF02 | Falha de validação retorna HTTP 400 com corpo JSON contendo `erro` e `mensagem` (ou `errors` array) em pt-BR | Must |
+| RF01 | Validators cobrem todos os DTOs de request listados no escopo (nomes reais) | Must |
+| RF02 | Falha de validação retorna HTTP 400 com corpo JSON contendo `erro` e `mensagem` (primeiro erro) em pt-BR | Must |
 | RF03 | Validações manuais (`Validacao.*`) removidas dos services para os DTOs cobertos | Must |
 | RF04 | Comportamento de rate limiting, autenticação, autorização e escopo de condomínio **inalterado** | Must |
 | RF05 | Build (`dotnet build backend/SistemaCondominio.slnx`) passa sem warnings novos | Must |
@@ -58,23 +60,23 @@ Substituir a validação manual por **FluentValidation** de forma incremental, c
 |----|-----------|------------|
 | RNF01 | Tempo de resposta de validação < 5 ms (overhead negligenciável) | Should |
 | RNF02 | Código de validação declarativo, legível e testável isoladamente | Should |
-| RNF03 | Zero breaking changes na API pública (mesmos códigos de status, mesmo formato de erro) | Must |
+| RNF03 | Zero breaking changes na API pública (mesmos códigos de status, mesmo formato de erro `erro`/`mensagem`) | Must |
 
 ## Critérios de Aceite
 
 | Cenário | Dado | Quando | Então |
 |---------|------|--------|-------|
-| CA01 | CNPJ com 13 dígitos | POST `/api/condominios` | Retorna 400, mensagem "CNPJ deve conter 14 dígitos numéricos" |
-| CA02 | E-mail inválido | POST `/api/usuarios` | Retorna 400, mensagem "E-mail inválido" |
-| CA03 | Senha com 6 caracteres | POST `/api/usuarios` | Retorna 400, mensagem "Senha deve ter no mínimo 8 caracteres" |
-| CA04 | Campo obrigatório ausente (ex.: `nome` do local) | POST `/api/locais` | Retorna 400, mensagem "Nome é obrigatório" |
-| CA05 | Tipo de serviço inválido | POST `/api/servicos` | Retorna 400, mensagem "Tipo de serviço inválido" |
+| CA01 | CNPJ com 13 dígitos | POST `/api/condominios` | Retorna 400, mensagem **"CNPJ deve conter 14 dígitos"** |
+| CA02 | E-mail inválido | POST `/api/usuarios` | Retorna 400, mensagem **"E-mail inválido"** |
+| CA03 | Senha com 6 caracteres | POST `/api/usuarios` | Retorna 400, mensagem **"A senha deve ter no mínimo 8 caracteres"** |
+| CA04 | Campo obrigatório ausente (ex.: `nome` do local) | POST `/api/locais` | Retorna 400, mensagem **"Nome do local é obrigatório"** |
+| CA05 | ~~Tipo de serviço inválido~~ | — | **Removido** — binding nativo do enum `TipoServico` já valida |
 | CA06 | DTO válido | Qualquer endpoint coberto | Request processado normalmente (201/200), validações de negócio (escopo, permissão) ainda executam |
-| CA07 | Múltiplos erros no mesmo request | POST `/api/condominios` com CNPJ inválido + nome vazio | Retorna 400 com **todos** os erros (não apenas o primeiro) |
-| CA08 | Script de ~90 cenários de permissão (Etapa 5) | Execução completa | Todos os cenários continuam passando (mesmos status codes, mesmas regras de 403/404) |
+| CA07 | Múltiplos erros no mesmo request | POST `/api/condominios` com CNPJ inválido + nome vazio | Retorna 400 com **primeiro erro** no envelope `erro`/`mensagem`; todos logados internamente |
+| CA08 | Script de ~90 cenários de permissão (Etapa 5) | Execução completa reproduzível | Todos os cenários continuam passando (mesmos status codes, mesmas regras de 403/404) |
 
 ---
 
-**Decisão**: Esta discovery propõe a integração do FluentValidation como melhoria incremental de qualidade de código, alinhada ao AGENTS.md e à pendência registrada no PROGRESSO.md. O escopo é contido, de baixo risco e não exige dependências externas.
+**Decisão**: Esta discovery propõe a integração do FluentValidation como melhoria incremental de qualidade de código, alinhada ao AGENTS.md e à pendência registrada no PROGRESSO.md. O escopo é contido, de baixo risco e não exige dependências externas além do pacote base `FluentValidation`.
 
-**Próximo passo**: Aprovação do Tech Lead (TCL) para iniciar implementação. Handoff registrado em `HANDOFF-FluentValidation.md`.
+**Próximo passo**: Aprovação do Tech Lead (TCL) para iniciar implementação, **após** QA definir regressão reproduzível e Rodrigo aprovar dependência. Handoff registrado em `HANDOFF-FluentValidation.md`. Decisões de produto em `RESOLUCAO-BLOQUEADORES-FluentValidation.md`.
